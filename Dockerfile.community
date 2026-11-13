@@ -1,0 +1,35 @@
+# syntax=docker/dockerfile:1
+#
+# ArkLaw: the community (bring-your-own-key) build of the Word add-in.
+# Static task pane only. No Vaquill backend, no Supabase, no build args.
+# Used by railway.json. The hosted-product Dockerfile next to this is untouched.
+
+# ---- Build stage ----
+# Full Debian image because one dependency (office-word-diff) is installed from
+# GitHub and needs git. The lockfile records it as git+ssh, so rewrite to https.
+FROM node:20-bookworm AS build
+WORKDIR /app
+RUN git config --global url."https://github.com/".insteadOf "ssh://git@github.com/" \
+ && git config --global --add url."https://github.com/".insteadOf "git@github.com:"
+
+# .env.community is excluded from the build context by .dockerignore, so set the
+# edition flag here instead.
+ENV VITE_EDITION=community
+
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
+COPY . .
+RUN npm run build:community \
+ && find dist -name '*.map' -delete
+
+# ---- Runtime stage: tiny Node static server, non-root ----
+FROM node:20-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build /app/dist ./dist
+COPY deploy/serve.mjs ./deploy/serve.mjs
+COPY manifest.arklaw.xml ./manifest.arklaw.xml
+USER node
+EXPOSE 8080
+CMD ["node", "deploy/serve.mjs"]

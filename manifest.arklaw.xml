@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<OfficeApp
+  xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+  xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
+  xsi:type="TaskPaneApp">
+
+  <!-- ArkLaw manifest. Built on the open-source Vaquill AI for Word community edition (Apache-2.0).
+       YOUR-DOMAIN.example.com is replaced with the live host automatically when this file is
+       downloaded from /manifest.xml on the running site (see deploy/serve.mjs). -->
+  <Id>6fe7fe78-e078-441b-a21e-a0d68e20c573</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>Arkalon</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="ArkLaw" />
+  <Description DefaultValue="Bring-your-own-key contract review, drafting, and document tools inside Word. Runs against your own AI provider; no hosted backend." />
+  <IconUrl DefaultValue="https://YOUR-DOMAIN.example.com/assets/icon-32.png" />
+  <HighResolutionIconUrl DefaultValue="https://YOUR-DOMAIN.example.com/assets/icon-80.png" />
+  <SupportUrl DefaultValue="https://YOUR-DOMAIN.example.com/" />
+
+  <!-- Only the origin you serve the add-in from. Calls to your AI provider
+       (api.openai.com / api.anthropic.com) go out via fetch and are governed by
+       CORS, not AppDomains, so they do not belong here. -->
+  <AppDomains>
+    <AppDomain>https://YOUR-DOMAIN.example.com</AppDomain>
+  </AppDomains>
+
+  <Hosts>
+    <Host Name="Document" />
+  </Hosts>
+
+  <Requirements>
+    <Sets DefaultMinVersion="1.6">
+      <Set Name="WordApi" MinVersion="1.6" />
+    </Sets>
+  </Requirements>
+
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://YOUR-DOMAIN.example.com/index.html" />
+  </DefaultSettings>
+
+  <Permissions>ReadWriteDocument</Permissions>
+
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/taskpaneappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <Hosts>
+      <Host xsi:type="Document">
+        <DesktopFormFactor>
+          <GetStarted>
+            <Title resid="GetStarted.Title" />
+            <Description resid="GetStarted.Description" />
+            <LearnMoreUrl resid="GetStarted.LearnMoreUrl" />
+          </GetStarted>
+          <ExtensionPoint xsi:type="PrimaryCommandSurface">
+            <OfficeTab id="TabHome">
+              <Group id="Vaquill.Group">
+                <Label resid="Vaquill.Group.Label" />
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16" />
+                  <bt:Image size="32" resid="Icon.32" />
+                  <bt:Image size="80" resid="Icon.80" />
+                </Icon>
+                <Control xsi:type="Button" id="Vaquill.OpenPane">
+                  <Label resid="Vaquill.OpenPane.Label" />
+                  <Supertip>
+                    <Title resid="Vaquill.OpenPane.Label" />
+                    <Description resid="Vaquill.OpenPane.Tip" />
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16" />
+                    <bt:Image size="32" resid="Icon.32" />
+                    <bt:Image size="80" resid="Icon.80" />
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>Vaquill.Taskpane</TaskpaneId>
+                    <SourceLocation resid="Taskpane.Url" />
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+          <ExtensionPoint xsi:type="ContextMenu">
+            <OfficeMenu id="ContextMenuText">
+              <Control xsi:type="Button" id="Vaquill.ContextReview">
+                <Label resid="Vaquill.Context.Label" />
+                <Supertip>
+                  <Title resid="Vaquill.Context.Label" />
+                  <Description resid="Vaquill.OpenPane.Tip" />
+                </Supertip>
+                <Icon>
+                  <bt:Image size="16" resid="Icon.16" />
+                  <bt:Image size="32" resid="Icon.32" />
+                  <bt:Image size="80" resid="Icon.80" />
+                </Icon>
+                <Action xsi:type="ShowTaskpane">
+                  <TaskpaneId>Vaquill.Taskpane</TaskpaneId>
+                  <SourceLocation resid="Taskpane.Url" />
+                </Action>
+              </Control>
+            </OfficeMenu>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images>
+        <bt:Image id="Icon.16" DefaultValue="https://YOUR-DOMAIN.example.com/assets/icon-16.png" />
+        <bt:Image id="Icon.32" DefaultValue="https://YOUR-DOMAIN.example.com/assets/icon-32.png" />
+        <bt:Image id="Icon.80" DefaultValue="https://YOUR-DOMAIN.example.com/assets/icon-80.png" />
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Taskpane.Url" DefaultValue="https://YOUR-DOMAIN.example.com/index.html" />
+        <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://YOUR-DOMAIN.example.com/" />
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="GetStarted.Title" DefaultValue="ArkLaw is ready" />
+        <bt:String id="Vaquill.Group.Label" DefaultValue="ArkLaw" />
+        <bt:String id="Vaquill.OpenPane.Label" DefaultValue="Open ArkLaw" />
+        <bt:String id="Vaquill.Context.Label" DefaultValue="Review with ArkLaw" />
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="GetStarted.Description" DefaultValue="Open the pane to review this contract, apply grounded redlines, and draft clauses with your own AI key." />
+        <bt:String id="Vaquill.OpenPane.Tip" DefaultValue="Review the open contract, apply tracked-change redlines, and run drafting and document tools." />
+      </bt:LongStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>
