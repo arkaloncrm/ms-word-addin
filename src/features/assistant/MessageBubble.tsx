@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { Markdown, type CitationCtx } from "./markdown";
+import { Markdown, type CitationCtx, type DocQuoteCtx } from "./markdown";
+import { locateInDocument } from "@/office/navigate";
 import { IconButton } from "@/ui/primitives";
 import { CopyIcon, EditIcon, CheckIcon } from "@/ui/icons";
 import { insertHtmlAtCursor } from "@/office/richInsert";
@@ -106,6 +107,11 @@ function AssistantActions({ message }: { message: AssistantMessage }) {
     </div>
   );
 }
+
+/** Quoted contract wording in an answer jumps to that wording in Word. */
+const DOC_QUOTES: DocQuoteCtx = {
+  onQuote: (text) => locateInDocument(text).catch(() => false),
+};
 
 function sourceLabel(s: ChatSource): string {
   return (
@@ -311,7 +317,7 @@ export function MessageBubble({
       </div>
       {message.content && (
         <div className="msg__body">
-          <Markdown text={message.content} citations={citations} />
+          <Markdown text={message.content} citations={citations} docQuotes={DOC_QUOTES} />
           {/* Trailing type-cursor while the answer streams. Not shown before any
               content arrives (the "Searching..." spinner covers that phase), so
               there is no lone caret floating above the thinking line. */}

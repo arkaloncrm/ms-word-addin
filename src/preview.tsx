@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AutoTextarea } from "@/ui/AutoTextarea";
 import { createRoot } from "react-dom/client";
+import { AppNavProvider } from "./app/nav";
 import { Header } from "./ui/Header";
 import { Badge, Banner, Button } from "./ui/primitives";
 import { SetupSummary } from "./features/review/SetupSummary";
@@ -8,6 +9,7 @@ import { ReviewToolbar } from "./features/review/ReviewToolbar";
 import { SignoffGate } from "./features/review/SignoffGate";
 import { ReviewSummary } from "./features/review/ReviewSummary";
 import { RedlineCard } from "./features/review/RedlineCard";
+import { ReviewFlags } from "./features/review/ReviewFlags";
 import { DocumentTools } from "./features/review/DocumentTools";
 import { OutlinePanel } from "./features/review/OutlinePanel";
 import { SaveToVaquill } from "./features/integration/SaveToVaquill";
@@ -46,6 +48,7 @@ const RESULT: ContractReviewResponse = {
       grounding: "verified",
       approvalLevel: "manager",
       isDealBreaker: false,
+      fromInstruction: "Confidentiality capped at 3 years",
     },
     {
       clauseName: "Governing Law",
@@ -83,6 +86,18 @@ const RESULT: ContractReviewResponse = {
     { tier: 2, tierLabel: "Should-have", items: ["Cap confidentiality term at three years"] },
   ],
   missingClauses: ["Indemnification", "Assignment"],
+  flags: [
+    {
+      clauseName: "Parties",
+      sectionReference: "Preamble",
+      observation: "The Recipient's company number is missing.",
+      quote: "Beta Holdings Pty Ltd of Level 3, 10 Example Street, Sydney",
+    },
+    {
+      clauseName: "Instruction not carried out",
+      observation: "You asked to remove the non-compete, but this NDA has no non-compete clause.",
+    },
+  ],
   approvalGate: {
     required: true,
     level: "partner",
@@ -133,6 +148,7 @@ function Preview() {
           <div className="review__body">
             <SignoffGate gate={RESULT.approvalGate!} />
             <ReviewSummary result={RESULT} />
+            <ReviewFlags flags={RESULT.flags ?? []} />
             <OutlinePanel />
             <DocumentTools redlines={RESULT.redlines} />
             <SaveToVaquill mode="review" redlines={RESULT.redlines} title="NDA (reviewed)" />
@@ -579,4 +595,5 @@ function ChangesPreview() {
 const hash = window.location.hash;
 const view =
   hash === "#tools" ? <ToolsPreview /> : hash === "#authority" ? <AuthorityPreview /> : hash === "#assistant" ? <AssistantPreview /> : hash === "#signoff" ? <GovernancePreview /> : hash === "#playbook" ? <PlaybookPreview /> : hash === "#draft" ? <DraftPreview /> : hash === "#changes" ? <ChangesPreview /> : <Preview />;
-createRoot(document.getElementById("root")!).render(view);
+// RedlineCard (and other views) read app navigation, so the harness supplies it.
+createRoot(document.getElementById("root")!).render(<AppNavProvider>{view}</AppNavProvider>);

@@ -8,6 +8,7 @@ import { toClauseTypeKey } from "@/lib/strings";
 import { readSelectionText } from "@/office/document";
 import { insertPassageAtCursor } from "@/office/richInsert";
 import { errorMessage } from "@/api/errors";
+import { SourceNote } from "@/ui/SourceNote";
 import "./clauses.css";
 
 const PREVIEW_MAX = 180;
@@ -223,6 +224,7 @@ function ClauseCard({
           {expanded ? "Show less" : "Read more"}
         </button>
       )}
+      <SourceNote>{clause.isSystem ? "the firm's clause library" : "your saved clauses"}</SourceNote>
       <div className="clause-card__actions">
         <Button variant="primary" size="sm" onClick={onInsert} loading={busy} disabled={busy}>
           Insert at cursor

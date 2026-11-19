@@ -99,3 +99,8 @@
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   line-height: 1.45;
 }
+
+/* Which typed instruction this card carries out ("You asked: ..."). */
+.redline__asked {
+  line-height: 1.35;
+}

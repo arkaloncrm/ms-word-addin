@@ -8,6 +8,7 @@ import { reconcileTerms, type Reconciliation } from "@/api/reconcile";
 import { insertClauseTracked } from "@/office/richInsert";
 import { readFullDocumentText } from "@/office/document";
 import { errorMessage } from "@/api/errors";
+import { SourceNote } from "@/ui/SourceNote";
 import "./transplant.css";
 
 const ACCEPT = ".pdf,.docx,.doc,.txt";
@@ -15,7 +16,7 @@ const ACCEPT = ".pdf,.docx,.doc,.txt";
 type State =
   | { status: "idle" }
   | { status: "extracting" }
-  | { status: "done"; clause: ExtractedClause }
+  | { status: "done"; clause: ExtractedClause; fileName: string }
   | { status: "error"; error: string };
 
 /**
@@ -41,7 +42,7 @@ export function TransplantView() {
     setRecon(null);
     setNote(null);
     try {
-      setState({ status: "done", clause: await extractClause(file, clause.trim()) });
+      setState({ status: "done", clause: await extractClause(file, clause.trim()), fileName: file.name });
     } catch (e) {
       setState({
         status: "error",
@@ -122,6 +123,10 @@ export function TransplantView() {
               </Button>
             </div>
             <div className="transplant-preview">{recon?.reconciledText ?? state.clause.text}</div>
+            <SourceNote>
+              {state.fileName}, copied word for word
+              {recon ? ", with defined terms changed to match this document" : ""}.
+            </SourceNote>
 
             {recon ? (
               <div className="stack" style={{ gap: 4 }}>

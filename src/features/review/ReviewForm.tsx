@@ -3,6 +3,7 @@ import { AutoTextarea } from "@/ui/AutoTextarea";
 import { Button, Field, SegmentedControl, Toggle, Spinner } from "@/ui/primitives";
 import { Combobox } from "@/ui/Combobox";
 import { PlaybookPicker } from "./PlaybookPicker";
+import { PartyPicker } from "./PartyPicker";
 import { ClientRulesCard } from "@/features/integration/ClientRulesCard";
 import {
   CONTRACT_TYPES,
@@ -18,6 +19,7 @@ import { improveLegalToolPrompt } from "@/api/improve-prompt";
 import { getReviewPrefs } from "@/lib/prefs";
 import { readDocumentText } from "@/office/document";
 import { classifyContract } from "@/api/contract-review";
+import { normalizeParties, partySide, type ContractParty } from "@/lib/parties";
 import type { RunParams } from "./useReview";
 
 type MarkupLevel = "light" | "standard" | "firm";
@@ -80,32 +82,43 @@ export function ReviewForm({
   const [paperSide, setPaperSide] = useState<PaperSide>("");
 
   // Zero-config entry: everything is inferred or defaulted, and the details live
-  // under "Adjust". `detecting` gates the chip while we classify; `detected`
-  // records the auto-detected type so we can show it was inferred, not guessed.
+  // under "Adjust". `detecting` gates the chip while we read the contract;
+  // `detected` records the auto-detected type so we can show it was inferred.
   const [showOptions, setShowOptions] = useState(false);
-  const [detecting, setDetecting] = useState(!initial?.contractType);
+  const [detecting, setDetecting] = useState(true);
   const [detected, setDetected] = useState<string | null>(null);
 
-  // Auto-detect the contract type from the open document on mount, so the user
-  // does not have to pick it. A "Run this playbook" handoff already carries the
-  // type, so respect it and skip detection. Best-effort: any failure keeps the
-  // remembered default.
+  // The contract's own parties ("Acme Pty Ltd", "Beta Holdings Pty Ltd"). When we
+  // find them, the lawyer picks the one they act for by name: reviewing from the
+  // wrong side is the costliest mistake a review can make, so we ask rather than
+  // guess. "Someone else" falls back to the generic role list under Adjust.
+  const [parties, setParties] = useState<ContractParty[]>([]);
+  const [partyIdx, setPartyIdx] = useState<number | null>(null);
+  const [partyOther, setPartyOther] = useState(false);
+  const chosenParty = partyIdx !== null ? (parties[partyIdx] ?? null) : null;
+  const needsParty = parties.length > 0 && !chosenParty && !partyOther;
+
+  // Read the open document on mount: detect the contract type (so the user does
+  // not have to pick it) and the parties it names. A "Run this playbook" handoff
+  // already carries the type, so that is kept; the parties are still read.
+  // Best-effort: any failure keeps the defaults.
   useEffect(() => {
-    if (initial?.contractType) return;
     let alive = true;
     (async () => {
       try {
         const text = await readDocumentText();
         if (!alive) return;
         if (text.trim().length >= CLASSIFY_MIN_CHARS) {
-          const { contractType: t, confidence } = await classifyContract(text);
-          if (alive && t && confidence >= 0.5) {
+          const { contractType: t, confidence, parties: found } = await classifyContract(text);
+          if (!alive) return;
+          if (!initial?.contractType && t && confidence >= 0.5) {
             setContractType(t);
             setDetected(t);
           }
+          setParties(normalizeParties(found));
         }
       } catch {
-        // Keep the default; detection is a convenience, not a requirement.
+        // Keep the defaults; detection is a convenience, not a requirement.
       } finally {
         if (alive) setDetecting(false);
       }
@@ -116,19 +129,23 @@ export function ReviewForm({
   }, [initial?.contractType]);
 
   const markupLabel = MARKUP_OPTIONS.find((o) => o.value === markupLevel)?.label ?? "Standard";
+  const sideLabel = chosenParty ? chosenParty.name : labelOf(USER_SIDES, userSide);
 
   return (
     <form
       className="stack"
       onSubmit={(e) => {
         e.preventDefault();
+        if (needsParty) return;
         // Jurisdiction + matter are the user's standing context, set once in
         // Settings. Read them fresh at submit so an edit in Settings applies
         // without re-mounting this form.
         const { jurisdiction, matterId } = getReviewPrefs();
         onRun({
           contractType,
-          userSide,
+          // The real party name ("Acme Pty Ltd (Discloser)") when the lawyer
+          // picked one; otherwise the generic role from Adjust.
+          userSide: chosenParty ? partySide(chosenParty) : userSide,
           jurisdiction,
           scope,
           playbookId: playbookId || undefined,
@@ -156,14 +173,13 @@ export function ReviewForm({
       >
         {detecting ? (
           <span className="row small muted" style={{ gap: 8, alignItems: "center", minWidth: 0 }}>
-            <Spinner /> Detecting contract type...
+            <Spinner /> Reading the contract...
           </span>
         ) : (
           <span className="small" style={{ minWidth: 0 }}>
             <strong>{labelOf(CONTRACT_TYPES, contractType)}</strong>
             <span className="muted">
-              {" · representing "}
-              {labelOf(USER_SIDES, userSide)}
+              {needsParty ? " · which party are you acting for?" : ` · representing ${sideLabel}`}
               {" · "}
               {markupLabel.toLowerCase()} markup
             </span>
@@ -185,6 +201,23 @@ export function ReviewForm({
         </Button>
       </div>
 
+      {/* The parties the contract names, by name. Always visible (not under
+          Adjust): it is the one setting a review cannot afford to get wrong. */}
+      <PartyPicker
+        parties={parties}
+        chosen={partyIdx}
+        other={partyOther}
+        onChoose={(i) => {
+          setPartyIdx(i);
+          setPartyOther(false);
+        }}
+        onOther={() => {
+          setPartyIdx(null);
+          setPartyOther(true);
+          setShowOptions(true);
+        }}
+      />
+
       {/* Overrides, collapsed by default. Opening them is the rare case where the
           reviewer disagrees with an inferred value or wants a non-default. */}
       {showOptions && (
@@ -202,14 +235,18 @@ export function ReviewForm({
           </Field>
 
           <div className="form-grid">
-            <Field label="I represent the">
-              <Combobox
-                value={userSide}
-                onChange={setUserSide}
-                options={USER_SIDES}
-                ariaLabel="I represent the"
-              />
-            </Field>
+            {/* The generic role list is only needed when the contract's parties
+                were not found, or the lawyer acts for someone not listed. */}
+            {(parties.length === 0 || partyOther) && (
+              <Field label="I represent the">
+                <Combobox
+                  value={userSide}
+                  onChange={setUserSide}
+                  options={USER_SIDES}
+                  ariaLabel="I represent the"
+                />
+              </Field>
+            )}
 
             <PlaybookPicker contractType={contractType} value={playbookId} onChange={setPlaybookId} />
           </div>
@@ -268,8 +305,11 @@ export function ReviewForm({
         </div>
       )}
 
+      {/* One box, three kinds of instruction: a stance, specific changes, or the
+          firm's house rules. Each change or rule comes back as its own card,
+          marked as asked for (see contractReviewPrompt / RedlineCard). */}
       <Field
-        label="Focus (optional)"
+        label="Instructions (optional)"
         action={
           <ImproveButton
             improving={focus.improving}
@@ -280,13 +320,29 @@ export function ReviewForm({
       >
         <AutoTextarea
           value={instructions}
-          placeholder="e.g. Prioritize liability, indemnity, and termination."
+          placeholder={
+            "e.g. Negotiate firmly for us. Change the employee's name to Sam Lee and probation to 3 months. " +
+            "If confidentiality is under 5 years, ask for 7."
+          }
           onChange={(e) => setInstructions(e.target.value)}
         />
       </Field>
+      <span className="small muted">
+        Give a stance, specific changes, or your house rules. Each change or rule comes back as its own card.
+      </span>
       {focus.note && <span className="small muted">{focus.note}</span>}
 
-      <Button type="submit" variant="primary" className="btn--cta" loading={busy} data-tour="rl-run">
+      {needsParty && !detecting && (
+        <span className="small muted">Pick the party you act for above, then review.</span>
+      )}
+      <Button
+        type="submit"
+        variant="primary"
+        className="btn--cta"
+        loading={busy}
+        disabled={needsParty}
+        data-tour="rl-run"
+      >
         Review this contract
       </Button>
     </form>

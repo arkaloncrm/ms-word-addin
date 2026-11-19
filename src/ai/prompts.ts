@@ -24,7 +24,12 @@ export function assistantSystem(context: string): string {
   const doc = context && context.trim()
     ? `\n\nThe user has a document open in Word. Ground your answer in it and quote it where relevant:\n"""\n${context.slice(0, 400_000)}\n"""`
     : "\n\nThe user has no document text attached; answer from general knowledge and say when you are unsure.";
-  return `${GROUNDING} Answer the lawyer's question clearly and directly.${doc}`;
+  // Quoting the document's exact words in double quotation marks lets the add-in
+  // turn each quote into a link that jumps to that wording in Word.
+  const quoting = context && context.trim()
+    ? " When a point relies on the document, quote its exact words in double quotation marks, copied verbatim, and name the clause number, so the lawyer can click the quote to see it in the document."
+    : "";
+  return `${GROUNDING} Answer the lawyer's question clearly and directly.${quoting}${doc}`;
 }
 
 export function rewritePrompt(
@@ -194,11 +199,30 @@ export function improvePrompt(prompt: string, kind: "drafting" | "legalTool" | "
 export function classifyContractPrompt(documentText: string): Prompt2 {
   return {
     system:
-      `${GROUNDING} Identify the contract type from the text. Return a lowercase snake_case key (e.g. "nda", "msa", "saas", "employment", "dpa", "consulting", "license") or null if unclear. ${JSON_ONLY} ` +
-      `Schema: {"contractType": string|null, "confidence": number}. confidence is 0 to 1.`,
+      `${GROUNDING} Identify the contract type from the text. Return a lowercase snake_case key (e.g. "nda", "msa", "saas", "employment", "dpa", "consulting", "license") or null if unclear. ` +
+      `Also list the contracting parties exactly as the contract names them (the company or person names, not labels like "the Customer"), ` +
+      `each with its role in this contract (for example "Discloser", "Recipient", "Customer", "Supplier", "Employer", "Employee"). ` +
+      `At most 4 parties. Use an empty list if the contract does not name them. ${JSON_ONLY} ` +
+      `Schema: {"contractType": string|null, "confidence": number, "parties": [{"name": string, "role": string}]}. confidence is 0 to 1.`,
     user: documentText.slice(0, 40_000),
   };
 }
+
+/**
+ * How the reviewer AI treats the lawyer's typed instructions. One box takes three
+ * kinds: a stance ("negotiate firmly"), specific changes ("change the name to Sam
+ * Lee") and house rules ("if confidentiality is under 5 years, ask for 7"). Each
+ * change or rule becomes its own redline tagged with fromInstruction, so the card
+ * can show it was asked for; anything that cannot be done is reported, not dropped.
+ */
+export const REVIEW_INSTRUCTION_RULES =
+  `The reviewer has given instructions (in the user message). They take priority over your own preferences. ` +
+  `Each instruction is a negotiating stance, a specific change to make, or a rule to apply. ` +
+  `Apply every stance to the whole review. Carry out every specific change, and every rule that applies to this contract, ` +
+  `as its own redline, and set fromInstruction on that redline to the instruction it carries out, in a few words. ` +
+  `If an instruction cannot be carried out (for example the clause it mentions is not in the contract), add a flag whose clauseName is ` +
+  `"Instruction not carried out" and whose observation says which instruction and why. ` +
+  `Set fromInstruction to null on redlines you raise yourself. `;
 
 export function contractReviewPrompt(
   documentText: string,
@@ -218,17 +242,20 @@ export function contractReviewPrompt(
   return {
     system:
       `${GROUNDING} Review this ${contractType || "contract"} from the ${userSide || "reviewing"} side. ${markup} ${paper} ` +
+      (instructions && instructions.trim() ? REVIEW_INSTRUCTION_RULES : "") +
       `For each issue produce a redline. currentLanguage MUST be copied VERBATIM from the contract (an exact substring) so it can be located; ` +
       `if you are proposing to ADD a missing clause, set currentLanguage to "" and grounding to "insertion". ` +
       `Set grounding to "verified" only when currentLanguage is an exact substring of the contract, else "unverified". ` +
-      `Mark isDealBreaker true only for walk-away issues. ${JSON_ONLY} ` +
+      `Mark isDealBreaker true only for walk-away issues. ` +
+      `In each flag, quote is the exact words from the contract the flag is about, copied VERBATIM (at most about 300 characters), or "" if the flag is about something missing. ` +
+      `${JSON_ONLY} ` +
       `Schema: {"summary": string, "overallRisk": "green"|"yellow"|"red", ` +
       `"redlines": [{"clauseName": string, "sectionReference": string|null, "currentLanguage": string, "proposedLanguage": string, ` +
       `"rationale": string, "fallbackPosition": string|null, "grounding": "verified"|"unverified"|"insertion", ` +
-      `"isDealBreaker": boolean, "nature": "substantive"|"housekeeping"}], ` +
+      `"isDealBreaker": boolean, "nature": "substantive"|"housekeeping", "fromInstruction": string|null}], ` +
       `"missingClauses": string[], ` +
       `"negotiationPriorities": [{"tier": number, "tierLabel": string, "items": string[]}], ` +
-      `"flags": [{"clauseName": string, "sectionReference": string, "observation": string}]}.`,
+      `"flags": [{"clauseName": string, "sectionReference": string, "observation": string, "quote": string}]}.`,
     user: (instructions ? `Reviewer instructions: ${instructions}\n\n` : "") + `Contract:\n${documentText.slice(0, 200_000)}`,
   };
 }

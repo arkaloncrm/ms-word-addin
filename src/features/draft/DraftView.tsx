@@ -34,6 +34,7 @@ import { FillView } from "@/features/fill/FillView";
 import { ClauseLibraryView } from "@/features/clauses/ClauseLibraryView";
 import { type DraftMode } from "./mode";
 import { ApiError, errorMessage } from "@/api/errors";
+import { SourceNote } from "@/ui/SourceNote";
 import "./draft.css";
 
 type Status = "idle" | "generating" | "done" | "error";
@@ -256,6 +257,10 @@ export function DraftView() {
             </Badge>
           )}
         </div>
+
+        <SourceNote>
+          written by AI from your inputs, not copied from a precedent. Check it before you rely on it.
+        </SourceNote>
 
         {result.sections.length > 0 && (
           <div className="stack" style={{ gap: 2 }}>

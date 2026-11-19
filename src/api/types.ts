@@ -34,6 +34,12 @@ export interface RedlineSuggestion {
    * which case the memo falls back to a severity heuristic for grouping.
    */
   nature?: "substantive" | "housekeeping";
+  /**
+   * The reviewer instruction this redline carries out ("probation to 3 months"),
+   * when the lawyer typed instructions; null or absent for issues the AI raised
+   * itself. Shown on the card so the lawyer can see each instruction was followed.
+   */
+  fromInstruction?: string | null;
 }
 
 export interface ReviewApprovalReason {
@@ -68,6 +74,9 @@ export interface ReviewFlag {
   clauseName: string;
   sectionReference?: string;
   observation: string;
+  /** The exact contract wording the flag is about, so the lawyer can jump to it.
+   *  Empty or absent when the flag is about something missing. */
+  quote?: string;
 }
 
 /** Analysis of a single contract clause (loosely rendered by the MVP). */

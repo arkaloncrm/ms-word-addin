@@ -950,3 +950,24 @@
   opacity: 0.6;
   cursor: default;
 }
+
+/* Quoted contract wording in an answer: click to see it in the document. */
+.msg__docquote {
+  display: inline;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted var(--brand);
+  text-underline-offset: 2px;
+}
+.msg__docquote:hover {
+  background: var(--brand-tint);
+}
+.msg__docquote--missing {
+  text-decoration-color: var(--text-muted);
+  cursor: help;
+}

@@ -587,7 +587,13 @@ export function RedlineCard({
               <GroundingBadge grounding={active.grounding} />
               {improved && <Badge tone="green">Stronger fix</Badge>}
               {isEdited && <Badge tone="brand">Edited</Badge>}
+              {redline.fromInstruction && <Badge tone="brand">As you asked</Badge>}
             </div>
+            {/* Which typed instruction this card carries out, read from the
+                original redline (a "stronger fix" rewrite does not carry it). */}
+            {redline.fromInstruction && (
+              <span className="small muted redline__asked">You asked: {redline.fromInstruction}</span>
+            )}
             {/* The distilled intent is only a useful subtitle when the full
                 rationale is hidden behind the "Why this change" toggle; when the
                 rationale is shown inline below, this line just duplicates it (and

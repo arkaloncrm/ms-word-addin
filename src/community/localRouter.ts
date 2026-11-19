@@ -16,6 +16,7 @@ import {
   rewritePrompt,
   riskPrompt,
 } from "@/ai/prompts";
+import { normalizeParties } from "@/lib/parties";
 import { searchCitation } from "./courtlistener";
 import { getDraftRow, startDraft } from "./draft";
 import { runJson } from "./llm";
@@ -169,6 +170,7 @@ async function handleLlm(path: string, body: Record<string, unknown>): Promise<u
       return {
         contractType: typeof raw.contractType === "string" ? raw.contractType : null,
         confidence: typeof raw.confidence === "number" ? raw.confidence : 0.5,
+        parties: normalizeParties(raw.parties),
       };
     }
     case "/api/v1/playbook-fit/check": {

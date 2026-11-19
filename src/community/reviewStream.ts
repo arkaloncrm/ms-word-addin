@@ -1,7 +1,7 @@
 import { errorMessage } from "@/api/errors";
 import { uuid } from "@/api/ids";
 import type { StreamHandlers } from "@/api/sse";
-import type { ContractReviewResponse, Grounding, RedlineSuggestion } from "@/api/types";
+import type { ContractReviewResponse, Grounding, RedlineSuggestion, ReviewFlag } from "@/api/types";
 import { clauseFixPrompt, contractReviewPrompt } from "@/ai/prompts";
 import { runJson } from "./llm";
 
@@ -39,10 +39,26 @@ function normalizeRedline(r: unknown, doc: string): RedlineSuggestion {
     approvalLevel: null,
     isDealBreaker: o.isDealBreaker === true,
     nature,
+    fromInstruction:
+      typeof o.fromInstruction === "string" && o.fromInstruction.trim() ? o.fromInstruction.trim() : null,
   };
 }
 
-function shapeReview(
+function normalizeFlag(f: unknown): ReviewFlag | null {
+  const o = (f && typeof f === "object" ? f : {}) as Record<string, unknown>;
+  const observation = str(o.observation).trim();
+  if (!observation) return null;
+  const quote = str(o.quote).trim();
+  return {
+    clauseName: str(o.clauseName, "Note").trim() || "Note",
+    sectionReference: typeof o.sectionReference === "string" && o.sectionReference ? o.sectionReference : undefined,
+    observation,
+    ...(quote ? { quote } : {}),
+  };
+}
+
+/** Exported for tests: turns the model's raw JSON into the review response shape. */
+export function shapeReview(
   raw: Record<string, unknown>,
   doc: string,
   contractType: string | null,
@@ -56,7 +72,9 @@ function shapeReview(
   const missingClauses = Array.isArray(raw.missingClauses)
     ? raw.missingClauses.filter((x): x is string => typeof x === "string")
     : [];
-  const flags = Array.isArray(raw.flags) ? (raw.flags as ContractReviewResponse["flags"]) : [];
+  const flags = (Array.isArray(raw.flags) ? raw.flags : [])
+    .map(normalizeFlag)
+    .filter((f): f is ReviewFlag => f !== null);
   return {
     id: uuid(),
     summary: str(raw.summary),
