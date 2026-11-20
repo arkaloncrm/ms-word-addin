@@ -210,8 +210,8 @@ export function CommunityCompareView() {
       />
 
       <p className="small muted" style={{ margin: 0 }}>
-        Compares on this device. Nothing is uploaded. For PDF references, formatting-aware diffs, and
-        an AI change summary, use the Vaquill AI hosted plan.
+        Compares on this device. Nothing is uploaded. PDF references, formatting-aware comparison and
+        an AI summary of the changes are not in ArkLaw yet.
       </p>
 
       {phase.kind === "error" && <Banner tone="danger">{phase.message}</Banner>}

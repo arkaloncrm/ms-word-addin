@@ -41,7 +41,7 @@ type MemoTone = "red" | "green" | "yellow";
 /**
  * How to locate this item's text in the document. `bookmarkIndex` is the
  * redline's original index in the full redlines array, so the anchor name
- * matches the one placed at review time (`Vaquill_clause_${index + 1}`). `text`
+ * matches the one placed at review time (`ArkLaw_clause_${index + 1}`). `text`
  * is the verbatim fallback search. Absent entirely for flags with no anchor.
  */
 interface MemoLocate {
@@ -124,7 +124,7 @@ async function jumpToItem(item: MemoItem): Promise<boolean> {
   try {
     if (
       loc.bookmarkIndex !== undefined &&
-      (await goToBookmark(`Vaquill_clause_${loc.bookmarkIndex + 1}`))
+      (await goToBookmark(`ArkLaw_clause_${loc.bookmarkIndex + 1}`))
     ) {
       return true;
     }

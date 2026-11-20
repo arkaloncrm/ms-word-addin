@@ -26,6 +26,8 @@ import { AttachmentChips } from "@/features/assistant/AttachmentChips";
 import { insertDraftFormatted } from "@/office/richInsert";
 import { JURISDICTIONS, labelOf } from "@/features/review/constants";
 import { getReviewPrefs } from "@/lib/prefs";
+import { COUNTRY_CODE } from "@/lib/region";
+import { isCommunity } from "@/community/edition";
 import { SaveToVaquill } from "@/features/integration/SaveToVaquill";
 import { useAppNav } from "@/app/nav";
 import { config } from "@/config";
@@ -123,10 +125,10 @@ export function DraftView() {
     const params: DraftParams = {
       category,
       title: title.trim() || labelOf(DRAFT_CATEGORIES, category),
-      // The backend requires a governing law for US drafts. JURISDICTIONS
-      // values are US state codes (or "" for general); "" maps to the
-      // "federal" sentinel (multi-state / federal). Omitting it 422s.
-      governingLawState: jurisdiction || "federal",
+      // Always send a governing law. JURISDICTIONS values are Australian state
+      // and territory codes, or "" for Australia as a whole, which is sent as
+      // the country code. The prompt names it in full (lawName in lib/region).
+      governingLawState: jurisdiction || COUNTRY_CODE,
       tone,
       specialInstructions: instructions,
       referenceDocumentIds: refs.refIds(),
@@ -369,16 +371,20 @@ export function DraftView() {
         <p className="small muted" style={{ margin: 0 }}>
           Generate a first-draft agreement and insert it into this document.
         </p>
-        <p className="small muted" style={{ margin: 0 }}>
-          <a href={`${config.appBase}/templates`} target="_blank" rel="noreferrer">
-            Browse templates
-          </a>{" "}
-          or{" "}
-          <a href={`${config.appBase}/drafting`} target="_blank" rel="noreferrer">
-            open your saved drafts
-          </a>{" "}
-          in Vaquill AI.
-        </p>
+        {/* Templates and saved drafts live in a hosted web app ArkLaw does not
+            have, so these links only show outside ArkLaw. */}
+        {!isCommunity() && (
+          <p className="small muted" style={{ margin: 0 }}>
+            <a href={`${config.appBase}/templates`} target="_blank" rel="noreferrer">
+              Browse templates
+            </a>{" "}
+            or{" "}
+            <a href={`${config.appBase}/drafting`} target="_blank" rel="noreferrer">
+              open your saved drafts
+            </a>{" "}
+            in the web app.
+          </p>
+        )}
       </div>
 
       <div className="form-grid">

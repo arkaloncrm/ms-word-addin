@@ -107,6 +107,8 @@ export async function communityReviewStream(body: unknown, opts: StreamHandlers)
     markupLevel?: string;
     paperSide?: string;
     reviewInstructions?: string;
+    /** The lawyer's default jurisdiction from Settings (see useReview). */
+    dealContext?: { governingLaw?: unknown };
   };
   const doc = b.documentText ?? "";
   opts.onEvent({ event: "init", data: JSON.stringify({ totalSteps: 1 }) });
@@ -119,6 +121,7 @@ export async function communityReviewStream(body: unknown, opts: StreamHandlers)
       str(b.markupLevel, "standard"),
       b.paperSide,
       b.reviewInstructions,
+      str(b.dealContext?.governingLaw),
     );
     const raw = (await runJson(p.system, p.user)) as Record<string, unknown>;
     const review = shapeReview(raw, doc, b.contractType ?? null, b.userSide ?? null);
@@ -139,7 +142,8 @@ export async function communityDraftFixStream(body: unknown, opts: StreamHandler
     data: JSON.stringify({ step: "draft", message: "Drafting a stronger clause", progress: 0.5 }),
   });
   try {
-    const p = clauseFixPrompt(str(b.clauseName, "Clause"), current, str(b.jurisdiction, "US"));
+    // Blank means Australia (see lawName in src/lib/region.ts).
+    const p = clauseFixPrompt(str(b.clauseName, "Clause"), current, str(b.jurisdiction));
     const raw = (await runJson(p.system, p.user)) as Record<string, unknown>;
     const proposed = str(raw.proposedLanguage) || current;
     const redline: RedlineSuggestion = {

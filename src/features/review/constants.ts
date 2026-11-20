@@ -3,6 +3,8 @@
  * Values must match the backend enums exactly (ContractType, UserSide in
  * app/models/legal_tools_schemas.py) or the request is rejected with a 422.
  */
+import { AU_JURISDICTIONS } from "@/lib/region";
+
 export interface Option {
   value: string;
   label: string;
@@ -68,52 +70,13 @@ export const USER_SIDES: Option[] = [
   { value: "other", label: "Other" },
 ];
 
-/** US-first jurisdictions. The backend accepts a free string; these are common. */
-// Governing-law options. `value` is the US STATE CODE sent as
-// dealContext.governingLaw (backend expects 'CA'/'NY'/'DE'); the empty value
-// means "no specific state" (general US / federal). The top-level review
-// `jurisdiction` is always "US" -- state names must NOT go into that field
-// (backend pattern ^([A-Z]{2}|INTL)$ 422s on "Delaware").
 /**
- * Supported US jurisdictions. Single source of truth is the backend
- * `app/core/us_states.py::US_STATES` (which mirrors the web app's
- * `frontend/src/lib/us-states.ts`): the curated set of states where we ship real
- * depth (statutes corpus, templates, exemplars). Codes are lowercase to match
- * the backend `state` payload; "" is general US / federal. Keep this in sync
- * when the supported set changes.
+ * Governing-law options: Australia, then each state and territory (see
+ * src/lib/region.ts). `value` is stored in the lawyer's settings and sent as
+ * dealContext.governingLaw; "" means Australia with no specific state. The
+ * top-level review `jurisdiction` is the country code ("AU").
  */
-export const JURISDICTIONS: Option[] = [
-  { value: "", label: "Federal / multi-state" },
-  { value: "al", label: "Alabama" },
-  { value: "az", label: "Arizona" },
-  { value: "ca", label: "California" },
-  { value: "co", label: "Colorado" },
-  { value: "ct", label: "Connecticut" },
-  { value: "dc", label: "District of Columbia" },
-  { value: "fl", label: "Florida" },
-  { value: "ga", label: "Georgia" },
-  { value: "il", label: "Illinois" },
-  { value: "in", label: "Indiana" },
-  { value: "la", label: "Louisiana" },
-  { value: "md", label: "Maryland" },
-  { value: "ma", label: "Massachusetts" },
-  { value: "mi", label: "Michigan" },
-  { value: "mn", label: "Minnesota" },
-  { value: "mo", label: "Missouri" },
-  { value: "nv", label: "Nevada" },
-  { value: "nj", label: "New Jersey" },
-  { value: "ny", label: "New York" },
-  { value: "nc", label: "North Carolina" },
-  { value: "oh", label: "Ohio" },
-  { value: "or", label: "Oregon" },
-  { value: "pa", label: "Pennsylvania" },
-  { value: "sc", label: "South Carolina" },
-  { value: "tn", label: "Tennessee" },
-  { value: "tx", label: "Texas" },
-  { value: "va", label: "Virginia" },
-  { value: "wa", label: "Washington" },
-  { value: "wi", label: "Wisconsin" },
-];
+export const JURISDICTIONS: Option[] = AU_JURISDICTIONS;
 
 export type ReviewScope = "document" | "selection";
 

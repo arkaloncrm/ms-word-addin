@@ -535,7 +535,7 @@ export function ReviewView({
     <div className="stack review">
       <ViewHeader
         title="Review this contract"
-        info="Vaquill AI suggests grounded edits from your side and applies them as native tracked changes. A green Verified badge means we found the exact clause in your document, so it is safe to auto-apply; amber means verify it yourself. The sign-off gate flags when a deal needs manager, partner, or GC approval before you send."
+        info="ArkLaw suggests grounded edits from your side and applies them as native tracked changes. A green Verified badge means we found the exact clause in your document, so it is safe to auto-apply; amber means verify it yourself. The sign-off gate flags when a deal needs manager, partner, or GC approval before you send."
         subtitle="Grounded redlines from your side, applied as native tracked changes."
       />
 

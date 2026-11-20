@@ -268,7 +268,7 @@ export function SettingsView({
               local jurisdiction default. */}
           {isCommunity() ? (
             <Field label="Default matter">
-              <UpgradeLink label="Matters (hosted)" />
+              <UpgradeLink label="Matters" />
             </Field>
           ) : (
             <MatterPicker
@@ -309,21 +309,30 @@ export function SettingsView({
       )}
 
       <div className="settings-footer">
-        <a className="settings-footer__link" href={SUPPORT_URL} target="_blank" rel="noreferrer">
-          Help &amp; support
-        </a>
-        <span className="settings-footer__dot" aria-hidden>
-          ·
-        </span>
-        <a className="settings-footer__link" href={PRIVACY_URL} target="_blank" rel="noreferrer">
-          Privacy
-        </a>
-        <span className="settings-footer__dot" aria-hidden>
-          ·
-        </span>
-        <a className="settings-footer__link" href={TERMS_URL} target="_blank" rel="noreferrer">
-          Terms
-        </a>
+        {/* These pages belong to the hosted product this add-in was forked from.
+            ArkLaw has no support, privacy or terms pages of its own yet, so it
+            shows only its name and version. */}
+        {isCommunity() ? (
+          <span className="small muted">ArkLaw</span>
+        ) : (
+          <>
+            <a className="settings-footer__link" href={SUPPORT_URL} target="_blank" rel="noreferrer">
+              Help &amp; support
+            </a>
+            <span className="settings-footer__dot" aria-hidden>
+              ·
+            </span>
+            <a className="settings-footer__link" href={PRIVACY_URL} target="_blank" rel="noreferrer">
+              Privacy
+            </a>
+            <span className="settings-footer__dot" aria-hidden>
+              ·
+            </span>
+            <a className="settings-footer__link" href={TERMS_URL} target="_blank" rel="noreferrer">
+              Terms
+            </a>
+          </>
+        )}
         <span className="settings-footer__ver">v{config.appVersion}</span>
       </div>
     </div>

@@ -9,6 +9,7 @@ import { PlaybookFit } from "./PlaybookFit";
 import { PlaybookLibrary } from "./PlaybookLibrary";
 import { CreatePlaybookFromDoc } from "./CreatePlaybookFromDoc";
 import { config } from "@/config";
+import { isCommunity } from "@/community/edition";
 import type { PlaybookDetail } from "@/api/playbooks";
 import "./playbook.css";
 import { humanize } from "@/lib/strings";
@@ -30,9 +31,10 @@ export function PlaybookView({
   const [clauseFilter, setClauseFilter] = useState("");
   // When true (in the detail view), show the fit report for the open playbook.
   const [showFit, setShowFit] = useState(false);
-  // Playbook management (create / edit / delete) lives in the web app; the pane
-  // is for USING a playbook on the open document.
-  const manageHref = `${config.appBase}/playbooks`;
+  // Playbook management (create / edit / delete) lives in the hosted web app;
+  // the pane is for USING a playbook on the open document. ArkLaw has no web
+  // app, so there is no management link.
+  const manageHref = isCommunity() ? undefined : `${config.appBase}/playbooks`;
 
   if (state.status === "loading") {
     return (

@@ -75,7 +75,7 @@ export async function errorFromResponse(res: Response): Promise<ApiError> {
 export function friendlyMessage(err: ApiError): string {
   switch (err.kind) {
     case "quota":
-      return "You have reached your usage limit for this plan. Open Vaquill AI to upgrade or wait for your quota to reset.";
+      return "You have reached your usage limit. Wait for it to reset, or check your plan.";
     case "too_large":
       return "This document is too large to review in full. Try selecting the section you want reviewed.";
     case "not_found":
@@ -83,9 +83,9 @@ export function friendlyMessage(err: ApiError): string {
     case "rate_limited":
       return "Too many requests right now. Please wait a moment and try again.";
     case "network":
-      return "Cannot reach Vaquill. Check your connection and try again.";
+      return "Cannot connect right now. Check your internet connection and try again.";
     case "server":
-      return "Vaquill AI had a problem completing that. Please try again.";
+      return "The service had a problem completing that. Please try again.";
     default:
       return err.message || "Something went wrong. Please try again.";
   }

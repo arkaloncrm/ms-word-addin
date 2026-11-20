@@ -56,8 +56,7 @@ export function ClientRulesCard({ onRulesText }: { onRulesText?: (text: string) 
   if (isCommunity())
     return (
       <UpgradeGate title="Client rules">
-        Set standing per-client positions that auto-apply every time you review that client's paper,
-        with a Vaquill AI account.
+        Standing positions for each client, applied every time you review that client's paper.
       </UpgradeGate>
     );
   if (clients === null || clients.length === 0) return null;

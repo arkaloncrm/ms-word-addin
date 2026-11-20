@@ -18,7 +18,7 @@ const PREVIEW_MAX = 180;
 const GENERIC_TYPES = new Set(["custom", "custom_clause", "general", "other", "misc", "uncategorized", ""]);
 // Legal acronyms that should stay uppercase when humanizing the clause-type key.
 const TYPE_ACRONYMS = new Set([
-  "ip", "nda", "msa", "dpa", "sla", "saas", "ai", "us", "uk", "eu", "baa",
+  "ip", "nda", "msa", "dpa", "sla", "saas", "ai", "au", "us", "uk", "eu", "baa",
   "psa", "sow", "tos", "fcpa", "ofac", "gdpr", "ccpa", "hipaa",
 ]);
 
@@ -270,7 +270,7 @@ function SaveClauseForm({
       <Field label="Clause name">
         <input
           value={name}
-          placeholder="e.g. Governing law - Delaware"
+          placeholder="e.g. Governing law - New South Wales"
           onChange={(e) => setName(e.target.value)}
           autoFocus
         />

@@ -10,7 +10,10 @@
 import { runWord } from "./run";
 import { findRanges } from "./search";
 
-export const VAQUILL_TAG = "vaquill";
+export const VAQUILL_TAG = "arklaw";
+
+/** Tag used by the build ArkLaw was forked from; still matched so older fields can be unlocked. */
+const LEGACY_TAG = "vaquill";
 
 export interface TagFieldsResult {
   dates: number;
@@ -114,7 +117,7 @@ export async function lockVaquillControls(lock: boolean): Promise<number> {
     controls.load("tag");
     await context.sync();
 
-    const ours = controls.items.filter((cc) => cc.tag === VAQUILL_TAG);
+    const ours = controls.items.filter((cc) => cc.tag === VAQUILL_TAG || cc.tag === LEGACY_TAG);
     for (const cc of ours) {
       cc.cannotEdit = lock;
     }

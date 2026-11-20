@@ -1,3 +1,4 @@
+import { COUNTRY_CODE } from "@/lib/region";
 import { request, requestForm } from "./http";
 import { ApiError } from "./errors";
 
@@ -250,7 +251,7 @@ function generateBody(p: DraftParams): Record<string, unknown> {
   return {
     category: p.category,
     title: p.title,
-    jurisdiction: "US",
+    jurisdiction: COUNTRY_CODE,
     tone: p.tone || "balanced",
     special_instructions: p.specialInstructions || undefined,
     governing_law_state: p.governingLawState || undefined,
@@ -455,7 +456,7 @@ export async function generateDraftQueued(
       throw new ApiError(
         "unknown",
         0,
-        "Draft generation is taking longer than expected. Open Vaquill AI to find it in your drafts.",
+        "Draft generation is taking longer than expected. Please try again.",
         "POLL_TIMEOUT",
       );
     }

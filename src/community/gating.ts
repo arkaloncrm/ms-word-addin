@@ -9,7 +9,7 @@ import { isCommunity } from "./edition";
  * UI gate PRESENTATION too, so the community build hides account-only surfaces
  * (usage/quota, org switcher) rather than showing something that would only error.
  */
-export const REQUIRES_ACCOUNT_NOTE = "Requires a Vaquill AI account";
+export const REQUIRES_ACCOUNT_NOTE = "Not available in ArkLaw yet";
 
 /** Surfaces that only make sense with a hosted Vaquill AI account. */
 export function showsAccountSurfaces(): boolean {

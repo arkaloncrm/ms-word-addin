@@ -1,4 +1,5 @@
 import { postStream } from "./sse";
+import { COUNTRY_CODE } from "@/lib/region";
 import { uuid } from "./ids";
 import { ApiError } from "./errors";
 import { isCommunity } from "@/community/edition";
@@ -129,7 +130,7 @@ export async function streamAssistant(
     messages,
     context: documentContext ? documentContext.slice(0, CONTEXT_CAP) : undefined,
     useRag: opts?.useRag ?? true,
-    countryCode: "US",
+    countryCode: COUNTRY_CODE,
     clientMessageId: uuid(),
   };
   if (opts?.matterId) body.matterId = opts.matterId;

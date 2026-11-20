@@ -3,7 +3,37 @@ import { describe, expect, it, vi } from "vitest";
 // The review shaper is pure; the AI runner is not needed (and needs a browser).
 vi.mock("./llm", () => ({ runJson: vi.fn() }));
 
-import { shapeReview } from "./reviewStream";
+import { communityDraftFixStream, communityReviewStream, shapeReview } from "./reviewStream";
+import { runJson } from "./llm";
+
+describe("Australian law reaches the AI", () => {
+  const events = { onEvent: vi.fn() };
+
+  it("tells the review which state's law the lawyer set in Settings", async () => {
+    vi.mocked(runJson).mockReset().mockResolvedValue({});
+    await communityReviewStream(
+      { documentText: "Contract.", contractType: "nda", dealContext: { governingLaw: "nsw" } },
+      events as never,
+    );
+    const system = vi.mocked(runJson).mock.calls[0][0];
+    expect(system).toContain("assess it under the law of New South Wales, Australia");
+    expect(system).toContain("You are ArkLaw");
+  });
+
+  it("assumes Australia when no state is set", async () => {
+    vi.mocked(runJson).mockReset().mockResolvedValue({});
+    await communityReviewStream({ documentText: "Contract." }, events as never);
+    expect(vi.mocked(runJson).mock.calls[0][0]).toContain("under the law of Australia.");
+  });
+
+  it("drafts a stronger clause under Australian law by default", async () => {
+    vi.mocked(runJson).mockReset().mockResolvedValue({ proposedLanguage: "Better." });
+    await communityDraftFixStream({ clauseName: "Confidentiality", currentLanguage: "Old." }, events as never);
+    const system = vi.mocked(runJson).mock.calls[0][0];
+    expect(system).toContain("under the law of Australia");
+    expect(system).not.toMatch(/\bUS\b/);
+  });
+});
 
 const DOC = "The Employee will be subject to a probationary period of six (6) months.";
 

@@ -1,3 +1,5 @@
+import { regulationForPrompt } from "@/features/compliance/regulations";
+import { COUNTRY_CODE } from "@/lib/region";
 import { ApiError } from "@/api/errors";
 import { uuid } from "@/api/ids";
 import {
@@ -94,7 +96,7 @@ function requiresAccount(): never {
   throw new ApiError(
     "unknown",
     0,
-    "This feature needs a Vaquill AI account and is not available in the community edition.",
+    "This feature is not available in ArkLaw yet.",
     "REQUIRES_ACCOUNT",
   );
 }
@@ -107,12 +109,12 @@ async function handleLlm(path: string, body: Record<string, unknown>): Promise<u
         str(body.instruction, "Rewrite for clarity and legal precision"),
         str(body.mode, "rewrite"),
         str(body.tone, "balanced"),
-        str(body.jurisdiction, "US"),
+        str(body.jurisdiction, COUNTRY_CODE),
       );
       return runJson(p.system, p.user);
     }
     case "/api/v1/drafting/clause/explain": {
-      const p = explainPrompt(str(body.clause_text), str(body.jurisdiction, "US"));
+      const p = explainPrompt(str(body.clause_text), str(body.jurisdiction, COUNTRY_CODE));
       return runJson(p.system, p.user);
     }
     case "/api/v1/legal-tools/plain-english": {
@@ -126,7 +128,7 @@ async function handleLlm(path: string, body: Record<string, unknown>): Promise<u
     case "/api/v1/legal-tools/compliance-check": {
       const p = compliancePrompt(
         str(body.documentText),
-        str(body.regulationType),
+        regulationForPrompt(str(body.regulationType)),
         str(body.documentCategory, "other"),
       );
       return runJson(p.system, p.user);
@@ -525,7 +527,7 @@ async function handleClausesCrud(
         name: str(body.name),
         clauseType: str(pick(body, "clause_type", "clauseType"), "custom"),
         content: str(body.content),
-        jurisdiction: str(body.jurisdiction, "US"),
+        jurisdiction: str(body.jurisdiction, COUNTRY_CODE),
         tone: str(body.tone, "balanced"),
         applicableActs: [],
         tags: strArray(body.tags),

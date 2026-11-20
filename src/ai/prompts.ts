@@ -7,14 +7,25 @@
  * These mirror the backend legal-tools / drafting / guideline / citation-style
  * services; they are intentionally kept short and deterministic.
  */
+import { lawName } from "@/lib/region";
+
 export interface Prompt2 {
   system: string;
   user: string;
 }
 
-const GROUNDING =
-  "You are Vaquill AI, a careful US legal assistant embedded in Microsoft Word. " +
-  "Be precise. Never invent citations, statutes, case names, or dates. " +
+/**
+ * Who the AI is, in every prompt. ArkLaw is for Australian lawyers: Australian
+ * law unless the document or the lawyer says otherwise, Australian English in its
+ * own words, and the document's own spelling in any wording it proposes (so a
+ * redline never "corrects" a contract's spelling as a side effect).
+ */
+export const GROUNDING =
+  "You are ArkLaw, a careful legal assistant for Australian lawyers, embedded in Microsoft Word. " +
+  "Unless the document or the lawyer says another law applies, assume Australian law: Commonwealth law and the law of the relevant state or territory. " +
+  'Write your own words in Australian English (for example "organisation", "favour", "licence" as a noun) and write dates as day month year (for example 1 July 2026). ' +
+  "When you propose wording for the document, match the spelling and defined terms the document already uses. " +
+  "Be precise. Never invent citations, Acts, sections, case names, or dates. " +
   "If something is not determinable from the text provided, say so rather than guessing.";
 
 const JSON_ONLY = "Respond with ONLY a single valid JSON object matching the schema. No prose, no markdown code fences.";
@@ -41,7 +52,7 @@ export function rewritePrompt(
 ): Prompt2 {
   return {
     system:
-      `${GROUNDING} Rewrite the clause per the instruction, mode (${mode}) and tone (${tone}) for ${jurisdiction}. ` +
+      `${GROUNDING} Rewrite the clause per the instruction, mode (${mode}) and tone (${tone}) under the law of ${lawName(jurisdiction)}. ` +
       `Preserve legal meaning unless asked to change it. ${JSON_ONLY} ` +
       `Schema: {"original": string, "rewritten": string, "changesSummary": string}.`,
     user: `Instruction: ${instruction}\n\nClause:\n${clause}`,
@@ -51,9 +62,9 @@ export function rewritePrompt(
 export function explainPrompt(clause: string, jurisdiction: string): Prompt2 {
   return {
     system:
-      `${GROUNDING} Explain the clause for ${jurisdiction}. ${JSON_ONLY} ` +
+      `${GROUNDING} Explain the clause under the law of ${lawName(jurisdiction)}. ${JSON_ONLY} ` +
       `Schema: {"explanation": string, "keyObligations": string[], "risks": string[], "applicableActs": string[]}. ` +
-      `Leave applicableActs empty unless you are certain of a specific statute.`,
+      `Leave applicableActs empty unless you are certain of a specific Act; name each one in full with its year and jurisdiction (for example "Privacy Act 1988 (Cth)").`,
     user: clause,
   };
 }
@@ -122,7 +133,7 @@ export function ndaTriagePrompt(
     system:
       `${GROUNDING} Screen this NDA against 10 standard criteria and classify it green (safe to sign), yellow (minor issues), or red (needs counsel). ` +
       `Criteria, in this id order: 1 Definition of Confidential Information, 2 Permitted Use, 3 Exclusions / carve-outs, 4 Term and duration, ` +
-      `5 Return or destruction of materials, 6 No license granted, 7 Remedies and injunctive relief, 8 Governing law and jurisdiction, ` +
+      `5 Return or destruction of materials, 6 No licence granted, 7 Remedies and injunctive relief, 8 Governing law and jurisdiction, ` +
       `9 Mutual vs one-sided balance, 10 Traps (residuals, non-solicit, non-compete, assignment). ${JSON_ONLY} ` +
       `Schema: {"classification": "green"|"yellow"|"red", "summary": string, ` +
       `"ndaType": "mutual"|"unilateral_disclosing"|"unilateral_receiving"|"unknown", "counterpartyName": string|null, ` +
@@ -231,7 +242,10 @@ export function contractReviewPrompt(
   markupLevel: string,
   paperSide: string | undefined,
   instructions: string | undefined,
+  /** The lawyer's default jurisdiction code from Settings ("" = Australia). */
+  governingLaw?: string,
 ): Prompt2 {
+  const law = `Unless the contract's governing law clause says otherwise, assess it under the law of ${lawName(governingLaw)}. `;
   const markup =
     markupLevel === "light"
       ? "Flag only escalation-worthy issues."
@@ -241,7 +255,7 @@ export function contractReviewPrompt(
   const paper = paperSide === "own" ? "This is our own template; defend it." : paperSide === "counterparty" ? "This is the counterparty's paper; mark it up assertively." : "";
   return {
     system:
-      `${GROUNDING} Review this ${contractType || "contract"} from the ${userSide || "reviewing"} side. ${markup} ${paper} ` +
+      `${GROUNDING} Review this ${contractType || "contract"} from the ${userSide || "reviewing"} side. ${law}${markup} ${paper} ` +
       (instructions && instructions.trim() ? REVIEW_INSTRUCTION_RULES : "") +
       `For each issue produce a redline. currentLanguage MUST be copied VERBATIM from the contract (an exact substring) so it can be located; ` +
       `if you are proposing to ADD a missing clause, set currentLanguage to "" and grounding to "insertion". ` +
@@ -263,7 +277,7 @@ export function contractReviewPrompt(
 export function clauseFixPrompt(clauseName: string, currentLanguage: string, jurisdiction: string): Prompt2 {
   return {
     system:
-      `${GROUNDING} Draft a stronger, balanced replacement for the "${clauseName}" clause for ${jurisdiction}. ` +
+      `${GROUNDING} Draft a stronger, balanced replacement for the "${clauseName}" clause under the law of ${lawName(jurisdiction)}. ` +
       `Keep it enforceable and surgical. If the current clause is already strong, set noChangeNeeded true and echo it. ${JSON_ONLY} ` +
       `Schema: {"proposedLanguage": string, "rationale": string, "fallbackPosition": string|null, "noChangeNeeded": boolean}.`,
     user: `Current clause:\n${currentLanguage}`,
@@ -338,10 +352,10 @@ export function draftGeneratePrompt(
   specialInstructions: string,
   referenceText: string,
 ): Prompt2 {
-  const gov = governingLawState ? ` governed by ${governingLawState} law` : "";
   return {
     system:
-      `${GROUNDING} Draft a complete, professional US ${category} titled "${title}" in a ${tone} tone${gov}. ` +
+      `${GROUNDING} Draft a complete, professional Australian ${category} titled "${title}" in a ${tone} tone, ` +
+      `governed by the law of ${lawName(governingLawState)}. ` +
       `Use clear section headings. Do NOT invent party names, amounts, or dates: leave unknowns as [bracketed placeholders]. ${JSON_ONLY} ` +
       `Schema: {"sections": [{"title": string, "content": string}]}. Produce the full set of sections a ${category} needs, in order.`,
     user:

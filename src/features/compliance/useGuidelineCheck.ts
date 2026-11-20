@@ -12,11 +12,11 @@ const MIN_CHARS = 100;
  * read as reviewer prompts, not legal advice.
  */
 export const DEFAULT_GUIDELINES: string[] = [
-  "Are payment terms net 30 or better?",
+  "Are payment terms 30 days or better?",
   "Is liability capped, and is the cap reasonable?",
   "Is there a mutual confidentiality obligation?",
   "Can either party terminate for convenience with notice?",
-  "Is the governing law a US state?",
+  "Is the governing law an Australian state or territory?",
 ];
 
 export type GuidelineState =

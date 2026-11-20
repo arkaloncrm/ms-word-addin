@@ -1,3 +1,4 @@
+import { COUNTRY_CODE } from "@/lib/region";
 import { request } from "./http";
 
 /**
@@ -56,7 +57,7 @@ export interface NdaTriageResult {
   effectiveClassification?: NdaClassification | null;
 }
 
-/** Screen a full NDA. Jurisdiction is fixed to US (US-only product). */
+/** Screen a full NDA. Jurisdiction is the country ArkLaw works in (Australia). */
 export async function triageNda(
   args: { documentText: string; counterpartyName?: string; businessContext?: string },
   signal?: AbortSignal,
@@ -67,7 +68,7 @@ export async function triageNda(
       documentText: args.documentText,
       counterpartyName: args.counterpartyName || undefined,
       businessContext: args.businessContext || undefined,
-      jurisdiction: "US",
+      jurisdiction: COUNTRY_CODE,
     },
     signal,
   });

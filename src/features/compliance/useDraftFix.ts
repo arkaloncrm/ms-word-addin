@@ -1,3 +1,4 @@
+import { COUNTRY_CODE } from "@/lib/region";
 import { useCallback, useState } from "react";
 import { rewriteClause, type ComplianceRequirement } from "@/api/clause-tools";
 import { insertClauseTracked } from "@/office/richInsert";
@@ -58,7 +59,7 @@ export function useDraftFix(req: ComplianceRequirement) {
         instruction: buildInstruction(req),
         mode: "rewrite",
         tone: "protective",
-        jurisdiction: "US",
+        jurisdiction: COUNTRY_CODE,
       });
       const text = result.rewritten?.trim();
       if (!text) {

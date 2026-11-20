@@ -51,6 +51,6 @@ export function assertConfigured(): void {
     : (["supabaseUrl", "supabaseAnonKey", "addinOrigin"] as const);
   const missing = required.filter((k) => !config[k]);
   if (missing.length) {
-    throw new Error(`Vaquill AI add-in misconfigured. Missing: ${missing.join(", ")}`);
+    throw new Error(`ArkLaw add-in misconfigured. Missing: ${missing.join(", ")}`);
   }
 }

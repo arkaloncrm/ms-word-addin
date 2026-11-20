@@ -17,7 +17,7 @@ export function KeyWizard() {
   return (
     <div className="stack" style={{ gap: 16, padding: 16, maxWidth: 460, margin: "0 auto" }}>
       <div className="stack" style={{ gap: 4 }}>
-        <h1 style={{ margin: 0, fontSize: "var(--fs-body-lg, 18px)" }}>Set up Vaquill AI</h1>
+        <h1 style={{ margin: 0, fontSize: "var(--fs-body-lg, 18px)" }}>Set up ArkLaw</h1>
         <p className="small muted" style={{ margin: 0 }}>
           This edition runs on your own AI provider. Add a key to unlock the assistant, review,
           drafting, and the tools. Everything runs against your key, from your machine.

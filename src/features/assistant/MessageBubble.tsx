@@ -313,7 +313,7 @@ export function MessageBubble({
     <div className="msg msg--assistant" ref={bodyRef}>
       <div className="msg__ident">
         <img src="/assets/icon-80.png" className="msg__ident-avatar" alt="" aria-hidden />
-        <span className="msg__ident-name">Vaquill AI</span>
+        <span className="msg__ident-name">ArkLaw</span>
       </div>
       {message.content && (
         <div className="msg__body">

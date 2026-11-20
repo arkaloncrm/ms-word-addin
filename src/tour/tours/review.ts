@@ -35,7 +35,7 @@ export const reviewTour: TourDef = {
     {
       nav: { reviewSub: "citations" },
       title: "Citations",
-      body: "Verify every case and statute the contract cites against the US corpus, with good-law signals.",
+      body: "Check that the case citations in a document point to real decisions. It covers US cases only for now.",
     },
     {
       nav: { reviewSub: "playbooks" },

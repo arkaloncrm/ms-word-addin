@@ -3,9 +3,9 @@
  * the user's standing context).
  *
  * Holds the user's DEFAULT matter (grounding workspace; "" when none), DEFAULT
- * jurisdiction (a US state code such as "CA" / "NY", or "" for general US /
- * federal) and DEFAULT contract type (an enum value such as "nda"; "" means
- * unset). The user sets these ONCE in Settings; Review and the Assistant read
+ * jurisdiction (an Australian state or territory code such as "nsw" / "vic", or
+ * "" for Australia as a whole; see src/lib/region.ts) and DEFAULT contract type
+ * (an enum value such as "nda"; "" means unset). The user sets these ONCE in Settings; Review and the Assistant read
  * matter + jurisdiction from here instead of re-asking on every run.
  *
  * Mirrors the pattern in ./org.ts: a single in-memory value, persisted in
@@ -13,12 +13,14 @@
  * get / set / subscribe and a startup init. Values are treated immutably; set()
  * builds a new object rather than mutating the current one.
  */
+import { isJurisdictionCode } from "./region";
+
 const STORAGE_KEY = "vaquill.reviewPrefs";
 
 export interface ReviewPrefs {
   /** Matter id to ground new work in, or "" for none. */
   matterId: string;
-  /** US state code (e.g. "CA") or "" for general US. */
+  /** Australian state or territory code (e.g. "nsw") or "" for Australia. */
   jurisdiction: string;
   /** Contract-type enum value (e.g. "nda") or "" when unset. */
   contractType: string;
@@ -31,17 +33,17 @@ const DEFAULT_PREFS: ReviewPrefs = { matterId: "", jurisdiction: "", contractTyp
 let prefs: ReviewPrefs = DEFAULT_PREFS;
 const listeners = new Set<Listener>();
 
-function sanitize(raw: unknown): ReviewPrefs {
+/** Exported for tests. Cleans whatever was stored by this or an older build. */
+export function sanitizeReviewPrefs(raw: unknown): ReviewPrefs {
   if (!raw || typeof raw !== "object") return DEFAULT_PREFS;
   const obj = raw as Record<string, unknown>;
+  // Jurisdiction codes are lowercase. A code that is not an Australian state or
+  // territory (for example "ca" or "ny" saved by the US build this add-in was
+  // forked from) falls back to "" (Australia), never to a US state.
+  const code = typeof obj.jurisdiction === "string" ? obj.jurisdiction.trim().toLowerCase() : "";
   return {
     matterId: typeof obj.matterId === "string" ? obj.matterId : "",
-    // Lowercase on load: jurisdiction codes are lowercase (matching the backend
-    // `state` payload and JURISDICTIONS options). An older build persisted
-    // uppercase ("CA"), which would no longer match the lowercase <option> and
-    // silently read as the general "Federal / multi-state" option.
-    jurisdiction:
-      typeof obj.jurisdiction === "string" ? obj.jurisdiction.toLowerCase() : "",
+    jurisdiction: isJurisdictionCode(code) ? code : "",
     contractType: typeof obj.contractType === "string" ? obj.contractType : "",
   };
 }
@@ -50,7 +52,7 @@ function sanitize(raw: unknown): ReviewPrefs {
 export function initReviewPrefs(): void {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    prefs = stored ? sanitize(JSON.parse(stored)) : DEFAULT_PREFS;
+    prefs = stored ? sanitizeReviewPrefs(JSON.parse(stored)) : DEFAULT_PREFS;
   } catch {
     prefs = DEFAULT_PREFS;
   }

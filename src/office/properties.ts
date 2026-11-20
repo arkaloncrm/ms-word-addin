@@ -1,7 +1,7 @@
 import { runWord } from "./run";
 
 /**
- * Stamp the Vaquill AI review status into the document's STANDARD custom properties
+ * Stamp the ArkLaw review status into the document's STANDARD custom properties
  * (`document.properties.customProperties`, WordApi 1.3). Unlike the sign-off
  * ledger (custom XML, invisible to anything but this add-in), these show in
  * Word's native File > Info > Properties and are read by DMS/records systems
@@ -12,10 +12,10 @@ import { runWord } from "./run";
  */
 
 const KEYS = {
-  status: "VaquillReviewStatus",
-  by: "VaquillReviewedBy",
-  at: "VaquillReviewedAt",
-  type: "VaquillContractType",
+  status: "ArkLawReviewStatus",
+  by: "ArkLawReviewedBy",
+  at: "ArkLawReviewedAt",
+  type: "ArkLawContractType",
 } as const;
 
 export interface VaquillReviewStamp {

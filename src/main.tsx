@@ -34,7 +34,7 @@ Office.onReady(() => {
   if (!isWordHost()) {
     root.render(
       <div style={{ padding: 16 }}>
-        <p>Vaquill AI for Word runs inside Microsoft Word.</p>
+        <p>ArkLaw runs inside Microsoft Word.</p>
       </div>,
     );
     return;
@@ -46,7 +46,7 @@ Office.onReady(() => {
   } catch (e) {
     root.render(
       <div style={{ padding: 16 }}>
-        <p>Vaquill AI for Word is not configured correctly.</p>
+        <p>ArkLaw is not configured correctly.</p>
         <p style={{ color: "#a4262c", fontSize: 12 }}>{(e as Error).message}</p>
       </div>,
     );
