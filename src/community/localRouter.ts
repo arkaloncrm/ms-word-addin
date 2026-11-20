@@ -6,6 +6,7 @@ import {
   citationStylePrompt,
   classifyContractPrompt,
   compliancePrompt,
+  draftHerePrompt,
   editDocumentPrompt,
   explainPrompt,
   guidelinesPrompt,
@@ -19,6 +20,9 @@ import {
   riskPrompt,
 } from "@/ai/prompts";
 import { normalizeParties } from "@/lib/parties";
+import { listDefinedTerms } from "@/lib/defined-terms";
+import { shapeDraftHere } from "@/features/drafthere/shape";
+import { DRAFT_HERE_PATH } from "@/api/draft-here";
 import { searchCitation } from "./courtlistener";
 import { getDraftRow, startDraft } from "./draft";
 import { runJson } from "./llm";
@@ -181,6 +185,22 @@ async function handleLlm(path: string, body: Record<string, unknown>): Promise<u
       ) as Record<string, { standardPosition: string; fallbackLadder: string[]; dealBreaker: string | null }>;
       const p = playbookFitPrompt(str(body.documentText), positions);
       return runJson(p.system, p.user);
+    }
+    case DRAFT_HERE_PATH: {
+      // "Draft here": one clause at the cursor, in the contract's own terms.
+      const documentText = str(body.documentText);
+      const heading = str(body.heading);
+      const p = draftHerePrompt({
+        documentText,
+        heading,
+        note: str(body.note),
+        instructions: str(body.instructions),
+        definedTerms: listDefinedTerms(documentText),
+        sameLine: body.placement === "same-line",
+        governingLaw: str(body.jurisdiction),
+        previousAttempt: str(body.previousAttempt),
+      });
+      return shapeDraftHere(await runJson(p.system, p.user), heading);
     }
     case "/api/v1/drafting/edit-document":
       // Whole-document instruction edits run on the user's own model. Not

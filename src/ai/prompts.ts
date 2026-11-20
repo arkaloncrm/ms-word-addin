@@ -274,6 +274,63 @@ export function contractReviewPrompt(
   };
 }
 
+/**
+ * "Draft here": write ONE clause at the lawyer's cursor, for the heading and/or
+ * [Draft: ...] note found there (see src/features/drafthere/target.ts). It must
+ * read as if the contract's own drafter wrote it, add nothing that was not asked
+ * for, and keep any notes for the lawyer OUT of the drafted text.
+ */
+export function draftHerePrompt(a: {
+  documentText: string;
+  heading: string;
+  note: string;
+  instructions: string;
+  definedTerms: string[];
+  sameLine: boolean;
+  /** The lawyer's default jurisdiction code ("" = Australia). */
+  governingLaw?: string;
+  /** The version the lawyer rejected with "Try again", so the next one differs. */
+  previousAttempt?: string;
+}): Prompt2 {
+  const asked = [
+    a.heading ? `the clause headed "${a.heading}"` : "",
+    a.note ? "the drafting note" : "",
+    a.instructions.trim() ? "the lawyer's instructions" : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const terms = a.definedTerms.length
+    ? `The contract's defined terms include: ${a.definedTerms.map((t) => `"${t}"`).join(", ")}. `
+    : "";
+  const where = a.sameLine
+    ? "The text continues on the same line as the heading, so begin with a full sentence, not a heading. "
+    : "The text goes in new paragraph(s) directly below the heading. ";
+  const retry = a.previousAttempt?.trim()
+    ? "The lawyer rejected the earlier version in the user message and asked for another try: write a genuinely different version (different structure or emphasis), still meeting every rule above. "
+    : "";
+  return {
+    system:
+      `${GROUNDING} The lawyer's cursor is at a point in the contract below. Draft ONLY the text for ${asked || "that point"}, ready to go into the contract there. ` +
+      `Unless the contract's governing law clause says otherwise, draft under the law of ${lawName(a.governingLaw)}. ` +
+      `Use the contract's defined terms exactly as written (same capitals and wording) and its party names, and follow its drafting style. ${terms}` +
+      `Write only what was asked for: no other clauses, no extra headings, and do not repeat the heading. ` +
+      `If the note or instructions list several points, cover each one, in order, as its own paragraph. ` +
+      `If you need sub-paragraphs, label them the way the contract does, for example (a), (b), (c). ` +
+      `Where a fact is not in the contract (an amount, a number of days, a name), use a [square-bracketed placeholder] rather than inventing it. ` +
+      where +
+      `Put nothing in "text" except contract wording: no commentary, no notes about how you drafted it, no markdown. ` +
+      `Anything the lawyer should check (an assumption you made, a conflict with another clause) goes in "notes", or null. ` +
+      retry +
+      `${JSON_ONLY} Schema: {"text": string, "notes": string|null}. Separate paragraphs in "text" with a blank line.`,
+    user:
+      (a.heading ? `Heading at the cursor: ${a.heading}\n` : "") +
+      (a.note ? `Drafting note in the document: ${a.note}\n` : "") +
+      (a.instructions.trim() ? `Lawyer's instructions: ${a.instructions.trim()}\n` : "") +
+      (a.previousAttempt?.trim() ? `Earlier version the lawyer rejected:\n${a.previousAttempt.trim().slice(0, 6_000)}\n` : "") +
+      `\nContract:\n${a.documentText.slice(0, 150_000)}`,
+  };
+}
+
 export function clauseFixPrompt(clauseName: string, currentLanguage: string, jurisdiction: string): Prompt2 {
   return {
     system:

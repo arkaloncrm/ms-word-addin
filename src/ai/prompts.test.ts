@@ -5,11 +5,62 @@ import {
   clauseFixPrompt,
   contractReviewPrompt,
   draftGeneratePrompt,
+  draftHerePrompt,
   explainPrompt,
   GROUNDING,
   REVIEW_INSTRUCTION_RULES,
   rewritePrompt,
 } from "./prompts";
+
+describe("draftHerePrompt", () => {
+  const base = {
+    documentText: 'Acme Pty Ltd (the "Supplier") ... "Customer Data" means ...',
+    heading: "Return of Data",
+    note: "",
+    instructions: "",
+    definedTerms: ["Supplier", "Customer Data"],
+    sameLine: false,
+  };
+
+  it("drafts only the clause at the cursor, in the contract's defined terms", () => {
+    const p = draftHerePrompt(base);
+    expect(p.system).toContain(GROUNDING);
+    expect(p.system).toContain('Draft ONLY the text for the clause headed "Return of Data"');
+    expect(p.system).toContain('"Supplier", "Customer Data"');
+    expect(p.system).toContain("no other clauses, no extra headings, and do not repeat the heading");
+    expect(p.system).toContain("under the law of Australia.");
+    expect(p.user).toContain("Heading at the cursor: Return of Data");
+  });
+
+  it("keeps notes to the lawyer out of the drafted text", () => {
+    const s = draftHerePrompt(base).system;
+    expect(s).toContain('Put nothing in "text" except contract wording');
+    expect(s).toContain('"notes"');
+    expect(s).toContain("[square-bracketed placeholder]");
+  });
+
+  it("passes the note, the lawyer's instructions, the state and the placement", () => {
+    const p = draftHerePrompt({
+      ...base,
+      note: "encryption at rest",
+      instructions: "keep it short",
+      sameLine: true,
+      governingLaw: "vic",
+    });
+    expect(p.system).toContain("the clause headed \"Return of Data\", the drafting note, the lawyer's instructions");
+    expect(p.system).toContain("continues on the same line as the heading");
+    expect(p.system).toContain("under the law of Victoria, Australia");
+    expect(p.user).toContain("Drafting note in the document: encryption at rest");
+    expect(p.user).toContain("Lawyer's instructions: keep it short");
+  });
+
+  it("asks for a different version on Try again", () => {
+    const p = draftHerePrompt({ ...base, previousAttempt: "The Supplier must return it." });
+    expect(p.system).toContain("write a genuinely different version");
+    expect(p.user).toContain("Earlier version the lawyer rejected:\nThe Supplier must return it.");
+    expect(draftHerePrompt(base).system).not.toContain("genuinely different");
+  });
+});
 
 describe("GROUNDING (who the AI is)", () => {
   it("is ArkLaw, for Australian lawyers, under Australian law", () => {

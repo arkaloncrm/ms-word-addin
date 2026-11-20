@@ -37,6 +37,7 @@ import { ClauseLibraryView } from "@/features/clauses/ClauseLibraryView";
 import { type DraftMode } from "./mode";
 import { ApiError, errorMessage } from "@/api/errors";
 import { SourceNote } from "@/ui/SourceNote";
+import { DraftHereCard } from "@/features/drafthere/DraftHereCard";
 import "./draft.css";
 
 type Status = "idle" | "generating" | "done" | "error";
@@ -369,7 +370,9 @@ export function DraftView() {
         info="Generates a first-draft agreement from your inputs and inserts it into the document. Treat it as a starting point, not a final draft: review the language, run it through Review, and get the required sign-off before you send it."
       />
         <p className="small muted" style={{ margin: 0 }}>
-          Generate a first-draft agreement and insert it into this document.
+          {isCommunity()
+            ? "Write one clause at your cursor, or generate a whole first-draft agreement."
+            : "Generate a first-draft agreement and insert it into this document."}
         </p>
         {/* Templates and saved drafts live in a hosted web app ArkLaw does not
             have, so these links only show outside ArkLaw. */}
@@ -386,6 +389,17 @@ export function DraftView() {
           </p>
         )}
       </div>
+
+      {/* One clause at the cursor (ArkLaw only: it runs on the lawyer's own AI
+          key; there is no hosted endpoint for it). */}
+      {isCommunity() && (
+        <>
+          <DraftHereCard />
+          <h2 className="small" style={{ margin: "4px 0 0", fontWeight: 600 }}>
+            Or draft a whole agreement
+          </h2>
+        </>
+      )}
 
       <div className="form-grid">
         {/* The two dropdowns pair on one row; Title (free text) gets its own full
