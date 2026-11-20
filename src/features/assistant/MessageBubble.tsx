@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
-import { Markdown, type CitationCtx } from "./markdown";
+import { Markdown, type CitationCtx, type DocQuoteCtx } from "./markdown";
+import { locateInDocument } from "@/office/navigate";
 import { IconButton } from "@/ui/primitives";
 import { CopyIcon, EditIcon, CheckIcon } from "@/ui/icons";
 import { insertHtmlAtCursor } from "@/office/richInsert";
@@ -11,6 +12,7 @@ import { FileTypeIcon } from "@/ui/fileIcons";
 import { Avatar } from "@/ui/Avatar";
 import { getUser } from "@/auth/session";
 import { SaveAnswerToNotes } from "@/features/integration/SaveAnswerToNotes";
+import { LawCited } from "./LawCited";
 
 /** Signed-in user's name + photo for the avatar (Google OAuth picture when
  *  present; the Avatar falls back to initials if there is no photo). */
@@ -106,6 +108,11 @@ function AssistantActions({ message }: { message: AssistantMessage }) {
     </div>
   );
 }
+
+/** Quoted contract wording in an answer jumps to that wording in Word. */
+const DOC_QUOTES: DocQuoteCtx = {
+  onQuote: (text) => locateInDocument(text).catch(() => false),
+};
 
 function sourceLabel(s: ChatSource): string {
   return (
@@ -307,11 +314,11 @@ export function MessageBubble({
     <div className="msg msg--assistant" ref={bodyRef}>
       <div className="msg__ident">
         <img src="/assets/icon-80.png" className="msg__ident-avatar" alt="" aria-hidden />
-        <span className="msg__ident-name">Vaquill AI</span>
+        <span className="msg__ident-name">ArkLaw</span>
       </div>
       {message.content && (
         <div className="msg__body">
-          <Markdown text={message.content} citations={citations} />
+          <Markdown text={message.content} citations={citations} docQuotes={DOC_QUOTES} />
           {/* Trailing type-cursor while the answer streams. Not shown before any
               content arrives (the "Searching..." spinner covers that phase), so
               there is no lone caret floating above the thinking line. */}
@@ -329,6 +336,9 @@ export function MessageBubble({
           anchorId={anchorId}
         />
       )}
+      {/* Every Commonwealth Act and section the answer cites, checked on the
+          official register, once the answer has finished. */}
+      {message.content && !message.pending && <LawCited text={message.content} />}
       {message.content && !message.pending && <AssistantActions message={message} />}
     </div>
   );

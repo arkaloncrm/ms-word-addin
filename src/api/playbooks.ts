@@ -1,3 +1,4 @@
+import { COUNTRY_CODE } from "@/lib/region";
 import { request, requestForm } from "./http";
 
 /**
@@ -106,7 +107,7 @@ export async function extractPlaybookFromText(text: string): Promise<ExtractedPl
     positions,
     extractedCount: res.extracted_count ?? Object.keys(positions).length,
     contractType: res.contract_type ?? "",
-    jurisdiction: res.jurisdiction ?? "US",
+    jurisdiction: res.jurisdiction ?? COUNTRY_CODE,
     source: res.source ?? "text",
   };
 }

@@ -2,6 +2,7 @@ import { postStream } from "./sse";
 import { request } from "./http";
 import { requestBinary } from "./http";
 import { ApiError } from "./errors";
+import type { ContractParty } from "@/lib/parties";
 import type {
   ContractReviewRequest,
   ContractReviewResponse,
@@ -19,10 +20,12 @@ const DRAFT_FIX = "/api/v1/legal-tools/contract-review/redline/draft-fix";
  * Auto-detect the contract type from the document so the Review form can pre-fill
  * it instead of asking the user. Fast, cheap, non-streaming. `contractType` is
  * null when nothing clearly fits, so the caller keeps its remembered default.
+ * `parties` (the contract's own party names) is sent by the community edition
+ * only; it is absent from the hosted backend, so callers must treat it as optional.
  */
 export async function classifyContract(
   documentText: string,
-): Promise<{ contractType: string | null; confidence: number }> {
+): Promise<{ contractType: string | null; confidence: number; parties?: ContractParty[] }> {
   return request(CLASSIFY, { method: "POST", body: { documentText } });
 }
 

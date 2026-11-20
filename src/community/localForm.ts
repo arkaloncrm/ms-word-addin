@@ -1,3 +1,4 @@
+import { COUNTRY_CODE } from "@/lib/region";
 import { ApiError } from "@/api/errors";
 import { extractClausePrompt, fillPrompt, playbookExtractPrompt } from "@/ai/prompts";
 import { storeReference } from "./draft";
@@ -37,7 +38,7 @@ export async function communityRequestForm<T>(path: string, form: FormData): Pro
       positions,
       extracted_count: Object.keys(positions).length,
       contract_type: typeof raw.contractType === "string" ? raw.contractType : "",
-      jurisdiction: "US",
+      jurisdiction: COUNTRY_CODE,
       source: "text",
     } as T;
   }
@@ -93,7 +94,7 @@ export async function communityRequestForm<T>(path: string, form: FormData): Pro
   throw new ApiError(
     "unknown",
     0,
-    "This feature needs a Vaquill AI account and is not available in the community edition.",
+    "This feature is not available in ArkLaw yet.",
     "REQUIRES_ACCOUNT",
   );
 }

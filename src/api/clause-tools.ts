@@ -1,3 +1,4 @@
+import { COUNTRY_CODE } from "@/lib/region";
 import { request } from "./http";
 
 /**
@@ -161,14 +162,14 @@ export async function rewriteClause(
   const body: Record<string, unknown> = {
     clause_text: clauseText,
     instruction: opts.instruction || "Rewrite for clarity and legal precision",
-    jurisdiction: opts.jurisdiction ?? "US",
+    jurisdiction: opts.jurisdiction ?? COUNTRY_CODE,
     mode: opts.mode ?? "rewrite",
     tone: opts.tone ?? "balanced",
   };
   return request(REWRITE, { method: "POST", body });
 }
 
-export async function explainClause(clauseText: string, jurisdiction = "US"): Promise<ExplainResult> {
+export async function explainClause(clauseText: string, jurisdiction: string = COUNTRY_CODE): Promise<ExplainResult> {
   return request(EXPLAIN, {
     method: "POST",
     body: { clause_text: clauseText, jurisdiction },

@@ -1,3 +1,4 @@
+import { COUNTRY_CODE } from "@/lib/region";
 import { request } from "./http";
 
 /**
@@ -59,7 +60,7 @@ export async function createClause(input: ClauseCreateInput): Promise<ClauseEntr
     name: input.name,
     clause_type: input.clauseType,
     content: input.content,
-    jurisdiction: input.jurisdiction ?? "US",
+    jurisdiction: input.jurisdiction ?? COUNTRY_CODE,
     tone: input.tone ?? "balanced",
     tags: input.tags ?? [],
   };

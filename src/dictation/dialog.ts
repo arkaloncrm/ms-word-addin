@@ -159,7 +159,7 @@ function run(): void {
   let finalText = "";
   let stopped = false; // user pressed Insert; stop restarting on silence.
   const rec = new Ctor();
-  rec.lang = "en-US";
+  rec.lang = "en-AU";
   rec.continuous = true;
   rec.interimResults = true;
 

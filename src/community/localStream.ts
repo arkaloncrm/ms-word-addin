@@ -3,6 +3,8 @@ import type { StreamHandlers } from "@/api/sse";
 import { getProvider } from "@/ai/providers/registry";
 import type { ChatAttachment, ChatMessage } from "@/ai/providers/types";
 import { assistantSystem } from "@/ai/prompts";
+import { officialTextFor } from "@/legal/officialText";
+import { register } from "@/legal/register";
 import { communityDraftFixStream, communityReviewStream } from "./reviewStream";
 import { communityEditDocument } from "./localRouter";
 
@@ -21,11 +23,17 @@ async function chatStream(body: unknown, opts: StreamHandlers): Promise<void> {
   const messages: ChatMessage[] = (b.messages ?? [])
     .filter((m): m is { role?: string; content: string } => typeof m?.content === "string")
     .map((m) => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.content }));
-  const system = assistantSystem(b.context ?? "");
   // Files (PDFs) the user attached, sent straight to the provider as a document.
   const attachments = Array.isArray(b.attachments) ? b.attachments : undefined;
 
   opts.onEvent({ event: "thinking", data: JSON.stringify({ step: "generating" }) });
+
+  // If the question names a Commonwealth Act and section, give the AI the
+  // official text first (best effort, a few seconds at most).
+  const question = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+  const official = await officialTextFor(question, register, { signal: opts.signal });
+  if (opts.signal?.aborted) return;
+  const system = assistantSystem(b.context ?? "", official);
 
   try {
     const provider = getProvider();

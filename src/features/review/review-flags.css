@@ -115,3 +115,17 @@
   line-height: 1.45;
   color: var(--text);
 }
+
+/* The exact contract wording a flag is about, with a jump-to-it button. */
+.review-flags__quote {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 4px;
+}
+.review-flags__quote q {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-muted);
+  font-style: italic;
+}

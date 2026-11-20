@@ -8,6 +8,7 @@ import { toClauseTypeKey } from "@/lib/strings";
 import { readSelectionText } from "@/office/document";
 import { insertPassageAtCursor } from "@/office/richInsert";
 import { errorMessage } from "@/api/errors";
+import { SourceNote } from "@/ui/SourceNote";
 import "./clauses.css";
 
 const PREVIEW_MAX = 180;
@@ -17,7 +18,7 @@ const PREVIEW_MAX = 180;
 const GENERIC_TYPES = new Set(["custom", "custom_clause", "general", "other", "misc", "uncategorized", ""]);
 // Legal acronyms that should stay uppercase when humanizing the clause-type key.
 const TYPE_ACRONYMS = new Set([
-  "ip", "nda", "msa", "dpa", "sla", "saas", "ai", "us", "uk", "eu", "baa",
+  "ip", "nda", "msa", "dpa", "sla", "saas", "ai", "au", "us", "uk", "eu", "baa",
   "psa", "sow", "tos", "fcpa", "ofac", "gdpr", "ccpa", "hipaa",
 ]);
 
@@ -223,6 +224,7 @@ function ClauseCard({
           {expanded ? "Show less" : "Read more"}
         </button>
       )}
+      <SourceNote>{clause.isSystem ? "the firm's clause library" : "your saved clauses"}</SourceNote>
       <div className="clause-card__actions">
         <Button variant="primary" size="sm" onClick={onInsert} loading={busy} disabled={busy}>
           Insert at cursor
@@ -268,7 +270,7 @@ function SaveClauseForm({
       <Field label="Clause name">
         <input
           value={name}
-          placeholder="e.g. Governing law - Delaware"
+          placeholder="e.g. Governing law - New South Wales"
           onChange={(e) => setName(e.target.value)}
           autoFocus
         />

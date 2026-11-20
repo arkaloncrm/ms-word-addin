@@ -123,8 +123,16 @@ const server = createServer(async (req, res) => {
 
     const info = await stat(file).catch(() => null);
     if (info?.isFile()) {
-      // Hashed build assets are content-addressed; HTML must revalidate.
-      const cache = path.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache";
+      // Only fingerprinted build files (name-HASH.js / .css, content-addressed)
+      // may be cached for a year. Files copied from public/ keep fixed names
+      // (icon-32.png, logo-512.png ...), so a new logo must reach Word within an
+      // hour, not a year. HTML must revalidate.
+      const fingerprinted = /^\/assets\/[^/]+-[A-Za-z0-9_-]{8}\.(?:js|css)$/.test(path);
+      const cache = fingerprinted
+        ? "public, max-age=31536000, immutable"
+        : path.startsWith("/assets/")
+          ? "public, max-age=3600"
+          : "no-cache";
       return await serveFile(res, file, cache);
     }
     if (path.startsWith("/assets/")) {

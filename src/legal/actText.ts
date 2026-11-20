@@ -1,0 +1,354 @@
+// Adapted from australian-law-mcp (https://github.com/ChangkeunJ/australian-law-mcp,
+// src/text.ts at commit 96318e4), Copyright (c) 2026 ChangkeunJ, MIT licence: see
+// LICENSE-australian-law-mcp.txt in this folder. Changed for ArkLaw: the epub is
+// opened with JSZip (already shipped with the add-in) instead of fflate, so it is
+// asynchronous; the version-diff helpers are left out; tocSectionNumbers (end of
+// file) and ActText.toc are ArkLaw additions.
+//
+// Turns an FRL epub into provision-level text.
+//
+// The register serves whole-document epubs only (no provision endpoint), but
+// the generated XHTML is regular: every piece of content is a block whose
+// class, or tag, says what it is.
+//
+// Quirks that the parsing has to survive, all confirmed against live epubs:
+// - there are two epub generations. Compilations from about 2005 onwards mark
+//   headings as <p class="ActHeadN">; older ones, which include every
+//   compilation of a long-repealed act, use <hN> with no class at all. A
+//   document is one generation or the other, never both, so mapping <hN> onto
+//   ActHeadN cannot double-count
+// - a section number is split across consecutive <span class="CharSectno">
+//   spans, so "50-5" arrives as "50", U+2011, "5" and must be rejoined
+// - the dash inside a section number is a non-breaking hyphen (U+2011), not
+//   the hyphen a caller will type
+// - Schedules carry operative content (the rate tables live there) under
+//   ActHead1/<h1> headings with no section numbers at all
+// - statutory formulas are images whose alt text is the formula
+// - a multi-volume epub is several document_N.html files that the register
+//   does not order logically, each with its own endnotes, so the endnote
+//   latch has to reset per document
+
+import JSZip from 'jszip';
+
+export interface Provision {
+  no: string;
+  heading: string;
+  context: string;
+  body: string;
+}
+
+export interface ActText {
+  provisions: Provision[];
+  endnotes: string;
+  /** ArkLaw: section numbers from the Act's own table of contents (see tocSectionNumbers). */
+  toc?: string[];
+}
+
+const ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: ' ',
+};
+
+export function decodeEntities(s: string): string {
+  return s.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (m, code: string) => {
+    if (code.startsWith('#x') || code.startsWith('#X')) return String.fromCodePoint(parseInt(code.slice(2), 16));
+    if (code.startsWith('#')) return String.fromCodePoint(parseInt(code.slice(1), 10));
+    return ENTITIES[code.toLowerCase()] ?? m;
+  });
+}
+
+function textOf(inner: string): string {
+  const withFormulas = inner.replace(/<img\b[^>]*?\balt="([^"]*)"[^>]*>/gi, ' $1 ');
+  return decodeEntities(withFormulas.replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim();
+}
+
+export interface Block {
+  cls: string;
+  sectNo: string | null;
+  heading: string;
+  text: string;
+}
+
+// From about 2004 the generator started stamping a style attribute onto the
+// section-number span, so the class is no longer immediately followed by ">".
+const SECTNO_SPAN = /<span class="CharSectno"[^>]*>([\s\S]*?)<\/span>/g;
+
+export function htmlBlocks(html: string): Block[] {
+  const blocks: Block[] = [];
+  const re = /<(p|h[1-6])\b([^>]*?)(?:\/>|>([\s\S]*?)<\/\1>)/gi;
+  for (let m = re.exec(html); m; m = re.exec(html)) {
+    const tag = (m[1] ?? '').toLowerCase();
+    const attrs = m[2] ?? '';
+    const inner = m[3] ?? '';
+    const level = /^h([1-6])$/.exec(tag);
+    const cls =
+      /class="([^"]*)"/.exec(attrs)?.[1] ??
+      (level ? `ActHead${Math.min(Number(level[1]), 5)}` : '');
+    const parts = [...inner.matchAll(SECTNO_SPAN)].map((s) => textOf(s[1] ?? ''));
+    const sectNo = parts.length > 0 ? parts.join('') : null;
+    const text = textOf(inner);
+    const heading = textOf(inner.replace(SECTNO_SPAN, ''));
+    if (!text && !sectNo) continue;
+    blocks.push({ cls, sectNo: sectNo || null, heading, text });
+  }
+  return blocks;
+}
+
+/** The document HTML files inside a register epub, in document order. */
+export async function epubDocuments(epub: Uint8Array | ArrayBuffer): Promise<string[]> {
+  const zip = await JSZip.loadAsync(epub);
+  const names = Object.keys(zip.files)
+    .filter((n) => /^OEBPS\/document_\d+\/document_\d+\.html$/.test(n))
+    .sort((a, b) => Number(/_(\d+)\//.exec(a)?.[1]) - Number(/_(\d+)\//.exec(b)?.[1]));
+  if (names.length === 0) throw new Error('no document html found inside the epub');
+  return Promise.all(names.map((n) => zip.files[n]!.async('string')));
+}
+
+const SKIP = /^(TOC\d*|Header|ShortT|Tabbing|UpdateDate)$/;
+const SCHEDULE = /^(Schedule\s*[\w]+)\s*(?:[—–-]\s*)?(.*)$/i;
+// A section number sitting at the front of heading text rather than in its own
+// span (the agency-template generation) — up to a long letter suffix like
+// 159GZZZZH and an ITAA-style "995-1".
+const LEADING_NO = /^(\d+[A-Z]{0,8}(?:[-‑.]\d+[A-Z]{0,8})?)\s+(.+)$/;
+// Where the operative text stops and the compilation's own notes begin. The
+// modern generation opens them with ENote*; the older one opens them with
+// "Notes to the <act>" and then runs tables of acts and amendments.
+const ENDNOTE = /^(ENote|EndNote|NotesSection|TableOf|ActNotes)/;
+
+function parseDocument(html: string, provisions: Provision[], endnoteLines: string[]): void {
+  const context: string[] = [];
+  let current: Provision | null = null;
+  let inSchedule = false;
+  let inEndnotes = false;
+
+  function open(no: string, heading: string): Provision {
+    const p: Provision = { no, heading, context: context.filter(Boolean).join(' > '), body: '' };
+    provisions.push(p);
+    return p;
+  }
+
+  for (const block of htmlBlocks(html)) {
+    if (SKIP.test(block.cls)) continue;
+    if (ENDNOTE.test(block.cls)) {
+      inEndnotes = true;
+      current = null;
+      if (block.text) endnoteLines.push(block.text);
+      continue;
+    }
+    if (inEndnotes) {
+      if (block.text) endnoteLines.push(block.text);
+      continue;
+    }
+
+    // The agency-template generation marks structure with LI-Heading classes
+    // and no CharSectno; the section number is the first token of the heading.
+    if (/^LI-Heading[1-6]$/.test(block.cls)) {
+      const schedule = SCHEDULE.exec(block.text);
+      if (schedule) {
+        context.length = 0;
+        inSchedule = true;
+        current = open((schedule[1] ?? block.text).replace(/\s+/g, ' '), schedule[2] ?? '');
+        continue;
+      }
+      const numbered = LEADING_NO.exec(block.text);
+      if (numbered) {
+        inSchedule = false;
+        current = open(numbered[1]!, numbered[2]!);
+        continue;
+      }
+      context.length = 0;
+      context[0] = block.text;
+      inSchedule = false;
+      current = null;
+      continue;
+    }
+
+    const head = /^ActHead([1-5])$/.exec(block.cls);
+    if (head) {
+      const depth = Number(head[1]);
+      if (depth === 5 && block.sectNo) {
+        current = open(block.sectNo, block.heading);
+        continue;
+      }
+      const schedule = depth === 1 ? SCHEDULE.exec(block.text) : null;
+      if (schedule) {
+        // A Schedule is where rate tables and forms live; treat the whole
+        // schedule as one addressable provision rather than dropping it.
+        context.length = 0;
+        inSchedule = true;
+        current = open((schedule[1] ?? block.text).replace(/\s+/g, ' '), schedule[2] ?? '');
+        continue;
+      }
+      if (inSchedule && depth > 1) {
+        // Parts and Divisions inside a schedule are section-less headings, so
+        // they belong in the schedule body.
+        if (current && block.text) current.body += (current.body ? '\n' : '') + block.text;
+        continue;
+      }
+      context.length = depth - 1;
+      context[depth - 1] = block.text;
+      inSchedule = false;
+      current = null;
+      continue;
+    }
+
+    if (current && block.text) {
+      current.body += (current.body ? '\n' : '') + block.text;
+    }
+  }
+}
+
+// The register's third and oldest generation: as-made scans of acts from 1901
+// into the 1970s, converted to XHTML with no structural markup whatsoever —
+// no ActHead classes, no heading tags, no CharSectno. The only section
+// boundary left is the prose: a marginal note, then a paragraph opening
+// "3.—(1.)". Reading that wrong would file one section's words under another
+// section's number, so what it recovers is accepted only if the numbers run
+// strictly upwards; anything else is treated as unreadable.
+const FLAT_SECTION = /^(\d{1,4}[A-Z]{0,3})\s*\.\s*(?:[—–-]\s*)?(?:\(\s*\d+[A-Za-z]?\s*\.?\s*\)\s*)?(?=[A-Z“"'(])/;
+const FLAT_SCHEDULE = /^(?:THE\s+)?(SCHEDULES?|FIRST\s+SCHEDULE|SECOND\s+SCHEDULE|Schedules?)\b/;
+
+function sortsAfter(a: string, b: string): boolean {
+  const [an, as] = [parseInt(a, 10), a.replace(/^\d+/, '')];
+  const [bn, bs] = [parseInt(b, 10), b.replace(/^\d+/, '')];
+  return bn > an || (bn === an && bs > as);
+}
+
+function parseFlatDocument(html: string): Provision[] {
+  const texts = htmlBlocks(html)
+    .filter((b) => !SKIP.test(b.cls) && b.text)
+    .map((b) => b.text);
+  // First decide where the sections and schedules start, so that a marginal
+  // note is never also read as body text of the section above it.
+  const opens = new Map<number, string>();
+  let last = '';
+  let sections = 0;
+  let schedules = 0;
+  for (let i = 0; i < texts.length; i++) {
+    const text = texts[i]!;
+    if (schedules === 0) {
+      const m = FLAT_SECTION.exec(text);
+      // An as-made act opens at section 1. Requiring the first accepted number
+      // to be exactly "1" steps over the statutory-rules banner "1904. No. 2.",
+      // which otherwise gets locked in as section 1904 and makes every real
+      // section fail the ascending-order test.
+      if (m && (last === '' ? m[1] === '1' : sortsAfter(last, m[1]!))) {
+        opens.set(i, m[1]!);
+        last = m[1]!;
+        sections++;
+        continue;
+      }
+    }
+    // The word "Schedules" also appears in these documents' tables of contents
+    // and in compilation notes, either of which would otherwise swallow the
+    // rest of the act. A real schedule comes after the sections, and a
+    // "(continued)" banner is the same schedule spilling onto the next page,
+    // not a new one.
+    if (sections >= 2 && text.length < 60 && FLAT_SCHEDULE.test(text) && !/contin/i.test(text)) {
+      opens.set(i, `Schedule${schedules === 0 ? '' : ` ${schedules + 1}`}`);
+      schedules++;
+    }
+  }
+  // An as-made act opens at section 1. Anything else means these numbers came
+  // from a table or a set of notes, not from the act's own structure.
+  if (sections < 2 || [...opens.values()][0] !== '1') return [];
+  const out: Provision[] = [];
+  let current: Provision | null = null;
+  for (let i = 0; i < texts.length; i++) {
+    const text = texts[i]!;
+    const no = opens.get(i);
+    if (no !== undefined) {
+      const prior = texts[i - 1];
+      // A marginal note is a short label. A run-on subsection like "(3.) The
+      // Principal Act ..." is the tail of the section above, not a heading.
+      const marginal =
+        i > 0 && prior !== undefined && !opens.has(i - 1) && prior.length <= 120 && /^[A-Z“"']/.test(prior);
+      current = {
+        no,
+        heading: no.startsWith('Schedule') ? text : marginal ? prior!.replace(/\.$/, '') : '',
+        context: '',
+        body: no.startsWith('Schedule') ? '' : text,
+      };
+      if (marginal && !no.startsWith('Schedule') && out.length > 0) {
+        const above = out[out.length - 1]!;
+        // Take the marginal note back off the previous section's body.
+        if (above.body.endsWith(prior!)) above.body = above.body.slice(0, -prior!.length).replace(/\n$/, '');
+      }
+      out.push(current);
+      continue;
+    }
+    if (current) current.body += (current.body ? '\n' : '') + text;
+  }
+  return out.filter((p) => p.body).length >= 2 ? out : [];
+}
+
+export function parseAct(html: string | string[]): ActText {
+  const docs = Array.isArray(html) ? html : [html];
+  const provisions: Provision[] = [];
+  const endnoteLines: string[] = [];
+  for (const doc of docs) {
+    parseDocument(doc, provisions, endnoteLines);
+  }
+  if (provisions.length === 0) {
+    for (const doc of docs) provisions.push(...parseFlatDocument(doc));
+  }
+  return { provisions, endnotes: endnoteLines.join('\n') };
+}
+
+// The register writes section numbers with a non-breaking hyphen; callers type
+// an ordinary one. Dots are significant (reg 1.05 is not section 105).
+export function normaliseSectionNo(no: string): string {
+  return no
+    .replace(/[‐‑‒–—−]/g, '-')
+    .replace(/\s+/g, '')
+    .replace(/^(?:ss?|sect(?:ion)?|reg(?:ulation)?|r|cl(?:ause)?)\.?(?=\d|Schedule)/i, '')
+    .toUpperCase();
+}
+
+export function findProvision(act: ActText, sectionNo: string): Provision | null {
+  const want = normaliseSectionNo(sectionNo);
+  return act.provisions.find((p) => normaliseSectionNo(p.no) === want) ?? null;
+}
+
+export function nearest(act: ActText, sectionNo: string, count = 3): Provision[] {
+  const want = normaliseSectionNo(sectionNo);
+  const wantNum = parseFloat(want);
+  if (Number.isNaN(wantNum)) return act.provisions.slice(0, count);
+  return [...act.provisions]
+    .map((p) => {
+      const n = parseFloat(normaliseSectionNo(p.no));
+      return { p, distance: Number.isNaN(n) ? Infinity : Math.abs(n - wantNum) };
+    })
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, count)
+    .map((x) => x.p);
+}
+
+// ---------------------------------------------------------------------------
+// ArkLaw addition (not in australian-law-mcp): the Act's own table of contents.
+//
+// A section missing from the parsed provisions might be a gap in the parse
+// rather than a section that does not exist. The register's epubs carry a
+// contents list (TOC5 lines, one per section, "6  Interpretation"), and on four
+// real Acts checked on 20 Nov 2026 (Privacy, Corporations, Fair Work, Spam) it
+// listed exactly the sections the parser found. ArkLaw only calls a section
+// "not in this Act" when this independent list agrees.
+// ---------------------------------------------------------------------------
+
+/** Section numbers listed in the Act's table of contents, normalised. */
+export function tocSectionNumbers(html: string | string[]): string[] {
+  const docs = Array.isArray(html) ? html : [html];
+  const out = new Set<string>();
+  for (const doc of docs) {
+    for (const block of htmlBlocks(doc)) {
+      if (block.cls !== 'TOC5') continue;
+      const m = LEADING_NO.exec(block.text);
+      if (m) out.add(normaliseSectionNo(m[1]!));
+    }
+  }
+  return [...out];
+}

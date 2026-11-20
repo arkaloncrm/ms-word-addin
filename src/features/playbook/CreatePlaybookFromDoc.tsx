@@ -91,7 +91,7 @@ export function CreatePlaybookFromDoc({ onCreated }: { onCreated: () => void }) 
           </span>
           <span className="small muted">
             Extracted {ex.extractedCount} clause position{ex.extractedCount === 1 ? "" : "s"}
-            {typeLabel ? ` · detected ${typeLabel}` : ""}. Refine it in Vaquill AI after saving.
+            {typeLabel ? ` · detected ${typeLabel}` : ""}. Check each position after saving.
           </span>
         </div>
         <Field label="Playbook name">

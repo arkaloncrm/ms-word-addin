@@ -108,6 +108,14 @@ function collectDefinitions(text: string): Map<string, number> {
   return defs;
 }
 
+/**
+ * The terms the document defines, each once, at most `max`. Used to
+ * tell a drafting model which defined terms to reuse exactly.
+ */
+export function listDefinedTerms(text: string, max = 80): string[] {
+  return [...collectDefinitions(text).keys()].slice(0, max);
+}
+
 function collectQuotedTokens(text: string): Set<string> {
   const tokens = new Set<string>();
   QUOTED_TOKEN.lastIndex = 0;

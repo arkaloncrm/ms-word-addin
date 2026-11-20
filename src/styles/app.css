@@ -16,14 +16,10 @@
   top: 0;
   z-index: 5;
 }
-.app-header__mark {
-  border-radius: var(--radius-sm);
+.app-header__logo {
   display: block;
-}
-.app-header__wordmark {
-  font-weight: 700;
-  letter-spacing: 0.1px;
-  color: var(--text);
+  height: 28px;
+  width: auto;
 }
 .org-switcher {
   max-width: 170px;

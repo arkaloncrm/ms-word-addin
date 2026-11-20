@@ -38,12 +38,12 @@ export function PlaybookPicker({
     return (
       <Field label="Playbook">
         <select disabled>
-          <option>Vaquill AI default positions</option>
+          <option>ArkLaw default positions</option>
         </select>
         <span className="small muted">
           {state.status === "error"
             ? "Could not load your playbooks. The review will use default positions."
-            : "No playbooks yet. Reviews use Vaquill AI's default positions."}
+            : "No playbooks yet. Reviews use ArkLaw's default positions."}
         </span>
       </Field>
     );
@@ -52,7 +52,7 @@ export function PlaybookPicker({
   return (
     <Field label="Playbook">
       <select value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">Vaquill AI default positions</option>
+        <option value="">ArkLaw default positions</option>
         {sorted.map((p) => (
           <option key={p.id} value={p.id}>
             {p.name}

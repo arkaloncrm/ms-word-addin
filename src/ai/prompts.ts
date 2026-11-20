@@ -7,24 +7,48 @@
  * These mirror the backend legal-tools / drafting / guideline / citation-style
  * services; they are intentionally kept short and deterministic.
  */
+import { lawName } from "@/lib/region";
+
 export interface Prompt2 {
   system: string;
   user: string;
 }
 
-const GROUNDING =
-  "You are Vaquill AI, a careful US legal assistant embedded in Microsoft Word. " +
-  "Be precise. Never invent citations, statutes, case names, or dates. " +
+/**
+ * Who the AI is, in every prompt. ArkLaw is for Australian lawyers: Australian
+ * law unless the document or the lawyer says otherwise, Australian English in its
+ * own words, and the document's own spelling in any wording it proposes (so a
+ * redline never "corrects" a contract's spelling as a side effect).
+ */
+export const GROUNDING =
+  "You are ArkLaw, a careful legal assistant for Australian lawyers, embedded in Microsoft Word. " +
+  "Unless the document or the lawyer says another law applies, assume Australian law: Commonwealth law and the law of the relevant state or territory. " +
+  'Write your own words in Australian English (for example "organisation", "favour", "licence" as a noun) and write dates as day month year (for example 1 July 2026). ' +
+  "When you propose wording for the document, match the spelling and defined terms the document already uses. " +
+  "Be precise. Never invent citations, Acts, sections, case names, or dates. " +
   "If something is not determinable from the text provided, say so rather than guessing.";
 
 const JSON_ONLY = "Respond with ONLY a single valid JSON object matching the schema. No prose, no markdown code fences.";
 
-/** Grounded assistant chat over the open document (streamed). */
-export function assistantSystem(context: string): string {
+/**
+ * How Ask should cite legislation, so ArkLaw can check each citation against
+ * the Federal Register of Legislation (see src/legal) and link to it.
+ */
+export const LEGISLATION_CITING =
+  ' When you cite legislation, name the Act in full with its year and jurisdiction, and the section, for example "section 6 of the Privacy Act 1988 (Cth)", so the lawyer can check it against the official register.';
+
+/** Grounded assistant chat over the open document (streamed). `officialText` is
+ *  section text fetched from the Federal Register of Legislation, if any. */
+export function assistantSystem(context: string, officialText = ""): string {
   const doc = context && context.trim()
     ? `\n\nThe user has a document open in Word. Ground your answer in it and quote it where relevant:\n"""\n${context.slice(0, 400_000)}\n"""`
     : "\n\nThe user has no document text attached; answer from general knowledge and say when you are unsure.";
-  return `${GROUNDING} Answer the lawyer's question clearly and directly.${doc}`;
+  // Quoting the document's exact words in double quotation marks lets the add-in
+  // turn each quote into a link that jumps to that wording in Word.
+  const quoting = context && context.trim()
+    ? " When a point relies on the document, quote its exact words in double quotation marks, copied verbatim, and name the clause number, so the lawyer can click the quote to see it in the document."
+    : "";
+  return `${GROUNDING} Answer the lawyer's question clearly and directly.${quoting}${LEGISLATION_CITING}${doc}${officialText}`;
 }
 
 export function rewritePrompt(
@@ -36,7 +60,7 @@ export function rewritePrompt(
 ): Prompt2 {
   return {
     system:
-      `${GROUNDING} Rewrite the clause per the instruction, mode (${mode}) and tone (${tone}) for ${jurisdiction}. ` +
+      `${GROUNDING} Rewrite the clause per the instruction, mode (${mode}) and tone (${tone}) under the law of ${lawName(jurisdiction)}. ` +
       `Preserve legal meaning unless asked to change it. ${JSON_ONLY} ` +
       `Schema: {"original": string, "rewritten": string, "changesSummary": string}.`,
     user: `Instruction: ${instruction}\n\nClause:\n${clause}`,
@@ -46,9 +70,9 @@ export function rewritePrompt(
 export function explainPrompt(clause: string, jurisdiction: string): Prompt2 {
   return {
     system:
-      `${GROUNDING} Explain the clause for ${jurisdiction}. ${JSON_ONLY} ` +
+      `${GROUNDING} Explain the clause under the law of ${lawName(jurisdiction)}. ${JSON_ONLY} ` +
       `Schema: {"explanation": string, "keyObligations": string[], "risks": string[], "applicableActs": string[]}. ` +
-      `Leave applicableActs empty unless you are certain of a specific statute.`,
+      `Leave applicableActs empty unless you are certain of a specific Act; name each one in full with its year and jurisdiction (for example "Privacy Act 1988 (Cth)").`,
     user: clause,
   };
 }
@@ -117,7 +141,7 @@ export function ndaTriagePrompt(
     system:
       `${GROUNDING} Screen this NDA against 10 standard criteria and classify it green (safe to sign), yellow (minor issues), or red (needs counsel). ` +
       `Criteria, in this id order: 1 Definition of Confidential Information, 2 Permitted Use, 3 Exclusions / carve-outs, 4 Term and duration, ` +
-      `5 Return or destruction of materials, 6 No license granted, 7 Remedies and injunctive relief, 8 Governing law and jurisdiction, ` +
+      `5 Return or destruction of materials, 6 No licence granted, 7 Remedies and injunctive relief, 8 Governing law and jurisdiction, ` +
       `9 Mutual vs one-sided balance, 10 Traps (residuals, non-solicit, non-compete, assignment). ${JSON_ONLY} ` +
       `Schema: {"classification": "green"|"yellow"|"red", "summary": string, ` +
       `"ndaType": "mutual"|"unilateral_disclosing"|"unilateral_receiving"|"unknown", "counterpartyName": string|null, ` +
@@ -194,11 +218,30 @@ export function improvePrompt(prompt: string, kind: "drafting" | "legalTool" | "
 export function classifyContractPrompt(documentText: string): Prompt2 {
   return {
     system:
-      `${GROUNDING} Identify the contract type from the text. Return a lowercase snake_case key (e.g. "nda", "msa", "saas", "employment", "dpa", "consulting", "license") or null if unclear. ${JSON_ONLY} ` +
-      `Schema: {"contractType": string|null, "confidence": number}. confidence is 0 to 1.`,
+      `${GROUNDING} Identify the contract type from the text. Return a lowercase snake_case key (e.g. "nda", "msa", "saas", "employment", "dpa", "consulting", "license") or null if unclear. ` +
+      `Also list the contracting parties exactly as the contract names them (the company or person names, not labels like "the Customer"), ` +
+      `each with its role in this contract (for example "Discloser", "Recipient", "Customer", "Supplier", "Employer", "Employee"). ` +
+      `At most 4 parties. Use an empty list if the contract does not name them. ${JSON_ONLY} ` +
+      `Schema: {"contractType": string|null, "confidence": number, "parties": [{"name": string, "role": string}]}. confidence is 0 to 1.`,
     user: documentText.slice(0, 40_000),
   };
 }
+
+/**
+ * How the reviewer AI treats the lawyer's typed instructions. One box takes three
+ * kinds: a stance ("negotiate firmly"), specific changes ("change the name to Sam
+ * Lee") and house rules ("if confidentiality is under 5 years, ask for 7"). Each
+ * change or rule becomes its own redline tagged with fromInstruction, so the card
+ * can show it was asked for; anything that cannot be done is reported, not dropped.
+ */
+export const REVIEW_INSTRUCTION_RULES =
+  `The reviewer has given instructions (in the user message). They take priority over your own preferences. ` +
+  `Each instruction is a negotiating stance, a specific change to make, or a rule to apply. ` +
+  `Apply every stance to the whole review. Carry out every specific change, and every rule that applies to this contract, ` +
+  `as its own redline, and set fromInstruction on that redline to the instruction it carries out, in a few words. ` +
+  `If an instruction cannot be carried out (for example the clause it mentions is not in the contract), add a flag whose clauseName is ` +
+  `"Instruction not carried out" and whose observation says which instruction and why. ` +
+  `Set fromInstruction to null on redlines you raise yourself. `;
 
 export function contractReviewPrompt(
   documentText: string,
@@ -207,7 +250,10 @@ export function contractReviewPrompt(
   markupLevel: string,
   paperSide: string | undefined,
   instructions: string | undefined,
+  /** The lawyer's default jurisdiction code from Settings ("" = Australia). */
+  governingLaw?: string,
 ): Prompt2 {
+  const law = `Unless the contract's governing law clause says otherwise, assess it under the law of ${lawName(governingLaw)}. `;
   const markup =
     markupLevel === "light"
       ? "Flag only escalation-worthy issues."
@@ -217,26 +263,86 @@ export function contractReviewPrompt(
   const paper = paperSide === "own" ? "This is our own template; defend it." : paperSide === "counterparty" ? "This is the counterparty's paper; mark it up assertively." : "";
   return {
     system:
-      `${GROUNDING} Review this ${contractType || "contract"} from the ${userSide || "reviewing"} side. ${markup} ${paper} ` +
+      `${GROUNDING} Review this ${contractType || "contract"} from the ${userSide || "reviewing"} side. ${law}${markup} ${paper} ` +
+      (instructions && instructions.trim() ? REVIEW_INSTRUCTION_RULES : "") +
       `For each issue produce a redline. currentLanguage MUST be copied VERBATIM from the contract (an exact substring) so it can be located; ` +
       `if you are proposing to ADD a missing clause, set currentLanguage to "" and grounding to "insertion". ` +
       `Set grounding to "verified" only when currentLanguage is an exact substring of the contract, else "unverified". ` +
-      `Mark isDealBreaker true only for walk-away issues. ${JSON_ONLY} ` +
+      `Mark isDealBreaker true only for walk-away issues. ` +
+      `In each flag, quote is the exact words from the contract the flag is about, copied VERBATIM (at most about 300 characters), or "" if the flag is about something missing. ` +
+      `${JSON_ONLY} ` +
       `Schema: {"summary": string, "overallRisk": "green"|"yellow"|"red", ` +
       `"redlines": [{"clauseName": string, "sectionReference": string|null, "currentLanguage": string, "proposedLanguage": string, ` +
       `"rationale": string, "fallbackPosition": string|null, "grounding": "verified"|"unverified"|"insertion", ` +
-      `"isDealBreaker": boolean, "nature": "substantive"|"housekeeping"}], ` +
+      `"isDealBreaker": boolean, "nature": "substantive"|"housekeeping", "fromInstruction": string|null}], ` +
       `"missingClauses": string[], ` +
       `"negotiationPriorities": [{"tier": number, "tierLabel": string, "items": string[]}], ` +
-      `"flags": [{"clauseName": string, "sectionReference": string, "observation": string}]}.`,
+      `"flags": [{"clauseName": string, "sectionReference": string, "observation": string, "quote": string}]}.`,
     user: (instructions ? `Reviewer instructions: ${instructions}\n\n` : "") + `Contract:\n${documentText.slice(0, 200_000)}`,
+  };
+}
+
+/**
+ * "Draft here": write ONE clause at the lawyer's cursor, for the heading and/or
+ * [Draft: ...] note found there (see src/features/drafthere/target.ts). It must
+ * read as if the contract's own drafter wrote it, add nothing that was not asked
+ * for, and keep any notes for the lawyer OUT of the drafted text.
+ */
+export function draftHerePrompt(a: {
+  documentText: string;
+  heading: string;
+  note: string;
+  instructions: string;
+  definedTerms: string[];
+  sameLine: boolean;
+  /** The lawyer's default jurisdiction code ("" = Australia). */
+  governingLaw?: string;
+  /** The version the lawyer rejected with "Try again", so the next one differs. */
+  previousAttempt?: string;
+}): Prompt2 {
+  const asked = [
+    a.heading ? `the clause headed "${a.heading}"` : "",
+    a.note ? "the drafting note" : "",
+    a.instructions.trim() ? "the lawyer's instructions" : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const terms = a.definedTerms.length
+    ? `The contract's defined terms include: ${a.definedTerms.map((t) => `"${t}"`).join(", ")}. `
+    : "";
+  const where = a.sameLine
+    ? "The text continues on the same line as the heading, so begin with a full sentence, not a heading. "
+    : "The text goes in new paragraph(s) directly below the heading. ";
+  const retry = a.previousAttempt?.trim()
+    ? "The lawyer rejected the earlier version in the user message and asked for another try: write a genuinely different version (different structure or emphasis), still meeting every rule above. "
+    : "";
+  return {
+    system:
+      `${GROUNDING} The lawyer's cursor is at a point in the contract below. Draft ONLY the text for ${asked || "that point"}, ready to go into the contract there. ` +
+      `Unless the contract's governing law clause says otherwise, draft under the law of ${lawName(a.governingLaw)}. ` +
+      `Use the contract's defined terms exactly as written (same capitals and wording) and its party names, and follow its drafting style. ${terms}` +
+      `Write only what was asked for: no other clauses, no extra headings, and do not repeat the heading. ` +
+      `If the note or instructions list several points, cover each one, in order, as its own paragraph. ` +
+      `If you need sub-paragraphs, label them the way the contract does, for example (a), (b), (c). ` +
+      `Where a fact is not in the contract (an amount, a number of days, a name), use a [square-bracketed placeholder] rather than inventing it. ` +
+      where +
+      `Put nothing in "text" except contract wording: no commentary, no notes about how you drafted it, no markdown. ` +
+      `Anything the lawyer should check (an assumption you made, a conflict with another clause) goes in "notes", or null. ` +
+      retry +
+      `${JSON_ONLY} Schema: {"text": string, "notes": string|null}. Separate paragraphs in "text" with a blank line.`,
+    user:
+      (a.heading ? `Heading at the cursor: ${a.heading}\n` : "") +
+      (a.note ? `Drafting note in the document: ${a.note}\n` : "") +
+      (a.instructions.trim() ? `Lawyer's instructions: ${a.instructions.trim()}\n` : "") +
+      (a.previousAttempt?.trim() ? `Earlier version the lawyer rejected:\n${a.previousAttempt.trim().slice(0, 6_000)}\n` : "") +
+      `\nContract:\n${a.documentText.slice(0, 150_000)}`,
   };
 }
 
 export function clauseFixPrompt(clauseName: string, currentLanguage: string, jurisdiction: string): Prompt2 {
   return {
     system:
-      `${GROUNDING} Draft a stronger, balanced replacement for the "${clauseName}" clause for ${jurisdiction}. ` +
+      `${GROUNDING} Draft a stronger, balanced replacement for the "${clauseName}" clause under the law of ${lawName(jurisdiction)}. ` +
       `Keep it enforceable and surgical. If the current clause is already strong, set noChangeNeeded true and echo it. ${JSON_ONLY} ` +
       `Schema: {"proposedLanguage": string, "rationale": string, "fallbackPosition": string|null, "noChangeNeeded": boolean}.`,
     user: `Current clause:\n${currentLanguage}`,
@@ -311,10 +417,10 @@ export function draftGeneratePrompt(
   specialInstructions: string,
   referenceText: string,
 ): Prompt2 {
-  const gov = governingLawState ? ` governed by ${governingLawState} law` : "";
   return {
     system:
-      `${GROUNDING} Draft a complete, professional US ${category} titled "${title}" in a ${tone} tone${gov}. ` +
+      `${GROUNDING} Draft a complete, professional Australian ${category} titled "${title}" in a ${tone} tone, ` +
+      `governed by the law of ${lawName(governingLawState)}. ` +
       `Use clear section headings. Do NOT invent party names, amounts, or dates: leave unknowns as [bracketed placeholders]. ${JSON_ONLY} ` +
       `Schema: {"sections": [{"title": string, "content": string}]}. Produce the full set of sections a ${category} needs, in order.`,
     user:

@@ -96,16 +96,16 @@ function commentText(r: AuthorityResult): string {
   if (r.kind === "statute") {
     if (r.verdict === "verified") {
       const label = r.label ?? r.raw;
-      return `${label}: resolved in Vaquill AI's US statutes corpus. Confirm it is current (not amended or repealed) before relying on it.${source}`;
+      return `${label}: resolved in the US statutes database. Confirm it is current (not amended or repealed) before relying on it.${source}`;
     }
-    return `Could not resolve ${r.raw} in Vaquill AI's US statutes corpus. Verify this citation manually before relying on it.`;
+    return `Could not resolve ${r.raw} in the US statutes database. Verify this citation manually before relying on it.`;
   }
   if (r.verdict === "verified") {
     const name = r.caseName ?? "This citation";
     const yr = r.year ? ` (${r.year})` : "";
     const g = r.goodLaw;
     const treatment = g ? ` Treatment: ${goodLawWord(g.status)}${g.label ? ` - ${g.label}` : ""}.` : "";
-    return `${name}${yr}: found in Vaquill AI's US case-law corpus. Confirm current treatment (not overruled or superseded) before relying on it.${treatment}${source}`;
+    return `${name}${yr}: found in the US case-law database. Confirm current treatment (not overruled or superseded) before relying on it.${treatment}${source}`;
   }
   return `No matching case found in the corpus for ${r.raw}. Verify this citation manually before relying on it.`;
 }
@@ -253,7 +253,7 @@ export function AuthorityItem({ result }: { result: AuthorityResult }) {
                 onSelect: () =>
                   navigate("assistant", {
                     kind: "assistantAsk",
-                    prompt: `The citation "${result.raw}" did not resolve in Vaquill AI's US corpus. Help me find the correct authority, or tell me whether it looks misstated or nonexistent.`,
+                    prompt: `The citation "${result.raw}" did not match a real case in the US case-law database. Help me find the correct authority, or tell me whether it looks misstated or nonexistent.`,
                     autoSend: true,
                   }),
               });

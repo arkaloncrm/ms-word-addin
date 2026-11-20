@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { isDocQuote } from "@/lib/docQuotes";
 
 /**
  * Minimal markdown renderer for assistant answers: headings, paragraphs, bullet
@@ -21,6 +22,36 @@ export interface CitationCtx {
   onCite: (n: number) => void;
 }
 
+/** Lets the renderer turn quoted contract wording ("the Recipient must ...") into
+ *  a link that jumps to that wording in the open document. Supplied only where the
+ *  answer is about the open document (the assistant); omitted elsewhere. */
+export interface DocQuoteCtx {
+  /** Jump to the wording in Word; resolves false when it cannot be found. */
+  onQuote: (text: string) => Promise<boolean>;
+}
+
+/** A quoted passage the lawyer can click to see it in the document. */
+function DocQuote({ text, ctx }: { text: string; ctx: DocQuoteCtx }) {
+  const [missing, setMissing] = useState(false);
+  return (
+    <button
+      type="button"
+      className={`msg__docquote${missing ? " msg__docquote--missing" : ""}`}
+      title={missing ? "Couldn't find this exact wording in the document" : "Show this wording in the document"}
+      onClick={() => {
+        ctx
+          .onQuote(text)
+          .then((ok) => setMissing(!ok))
+          .catch(() => setMissing(true));
+      }}
+    >
+      {"“"}
+      {text}
+      {"”"}
+    </button>
+  );
+}
+
 // Expand a citation marker's inner text ("11", "11,12", "11-13") to its numbers.
 function expandCitation(raw: string): number[] {
   const out: number[] = [];
@@ -39,14 +70,20 @@ function expandCitation(raw: string): number[] {
   return out;
 }
 
-function renderInline(text: string, keyBase: string, cite?: CitationCtx): ReactNode[] {
+function renderInline(
+  text: string,
+  keyBase: string,
+  cite?: CitationCtx,
+  quotes?: DocQuoteCtx,
+): ReactNode[] {
   const nodes: ReactNode[] = [];
   // Order matters: image (![]) before link ([]) so an image is not read as a
   // link; bold (**) before italic (*) so **x** is not read as *…*. Underscore
   // italic is intentionally omitted: legal text is full of identifiers like
-  // Sample_NDA_Agreement that would be mangled.
+  // Sample_NDA_Agreement that would be mangled. Quoted passages ("..." or
+  // curly quotes) come last, so markup inside other constructs wins.
   const regex =
-    /!\[([^\]]*)\]\(([^)\s]+)\)|\*\*([^*]+)\*\*|\*([^*\n]+)\*|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\)|\[(\d+(?:\s*[,-]\s*\d+)*)\]/g;
+    /!\[([^\]]*)\]\(([^)\s]+)\)|\*\*([^*]+)\*\*|\*([^*\n]+)\*|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\)|\[(\d+(?:\s*[,-]\s*\d+)*)\]|"([^"\n]{12,600})"|“([^”\n]{12,600})”/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
@@ -103,6 +140,13 @@ function renderInline(text: string, keyBase: string, cite?: CitationCtx): ReactN
       } else {
         nodes.push(m[0]);
       }
+    } else if (m[9] !== undefined || m[10] !== undefined) {
+      // Quoted passage: a jump-to-wording link when we have a document context
+      // and it reads like contract wording; otherwise the original text as-is.
+      const q = (m[9] ?? m[10] ?? "").trim();
+      nodes.push(
+        quotes && isDocQuote(q) ? <DocQuote key={`${keyBase}-dq${i}`} text={q} ctx={quotes} /> : m[0],
+      );
     }
     last = m.index + m[0].length;
     i += 1;
@@ -128,16 +172,25 @@ function splitRow(line: string): string[] {
     .map((c) => c.trim());
 }
 
-export function Markdown({ text, citations }: { text: string; citations?: CitationCtx }): ReactNode {
+export function Markdown({
+  text,
+  citations,
+  docQuotes,
+}: {
+  text: string;
+  citations?: CitationCtx;
+  docQuotes?: DocQuoteCtx;
+}): ReactNode {
   const lines = text.split("\n");
   const blocks: ReactNode[] = [];
   let list: { ordered: boolean; items: string[] } | null = null;
   let para: string[] = [];
   let quote: string[] = [];
   let key = 0;
-  // Every inline render carries the citation context so [N] markers anywhere in
-  // the answer (paragraphs, lists, table cells) become chips.
-  const ri = (t: string, k: string) => renderInline(t, k, citations);
+  // Every inline render carries the citation and quote contexts so [N] markers
+  // and quoted wording anywhere in the answer (paragraphs, lists, table cells)
+  // become chips and links.
+  const ri = (t: string, k: string) => renderInline(t, k, citations, docQuotes);
 
   const flushPara = () => {
     if (para.length) {

@@ -46,8 +46,8 @@ function PlaybookRow({
  * Searchable list of the user's playbooks, as a PICKER for acting on the open
  * document: open one to insert a rung, or run it against the document. Playbook
  * MANAGEMENT - create, rename, set-default, delete, versioning, analytics -
- * lives in the Vaquill AI web app, which is a far richer surface than a 300px pane;
- * `manageHref` deep-links to it rather than reimplementing a worse copy here.
+ * lives in the hosted web app when there is one; `manageHref` deep-links to it.
+ * ArkLaw has no web app, so it leaves `manageHref` out.
  *
  * Each row surfaces the real metadata the API emits: the per-contract-type
  * default (`isDefault`), an org-sharing flag (`organizationId` -> "Shared"
@@ -67,8 +67,12 @@ export function PlaybookLibrary({
   onOpen: (id: string) => void;
   /** When provided, each row gets a one-tap "Run against this document" button. */
   onRun?: (id: string) => void;
-  /** Deep-link to playbook management (create / edit / delete) in the web app. */
-  manageHref: string;
+  /**
+   * Deep-link to playbook management (create / edit / delete) in a hosted web
+   * app. ArkLaw has none, so it passes nothing: no "Manage" link is shown and
+   * the empty state points at "New playbook from this contract" instead.
+   */
+  manageHref?: string;
 }) {
   const q = query.trim().toLowerCase();
   const filtered = q
@@ -78,7 +82,7 @@ export function PlaybookLibrary({
       )
     : playbooks;
 
-  const manageLink = (
+  const manageLink = manageHref ? (
     <a
       href={manageHref}
       target="_blank"
@@ -86,22 +90,31 @@ export function PlaybookLibrary({
       className="small"
       style={{ color: "var(--brand)" }}
     >
-      Manage in Vaquill AI
+      Manage in the web app
     </a>
-  );
+  ) : undefined;
 
   const emptySlot =
     playbooks.length === 0 ? (
       <div className="stack playbook-empty">
         <span className="playbook-empty__title">No playbooks yet</span>
-        <span className="small muted">
-          Create and edit playbooks in the Vaquill AI web app, then run them here against your document.
-        </span>
-        <div className="row playbook-empty__cta">
-          <a className="btn btn--primary btn--sm" href={manageHref} target="_blank" rel="noreferrer">
-            <PlaybookIcon size={14} /> Create a playbook in Vaquill AI
-          </a>
-        </div>
+        {manageHref ? (
+          <>
+            <span className="small muted">
+              Create and edit playbooks in the web app, then run them here against your document.
+            </span>
+            <div className="row playbook-empty__cta">
+              <a className="btn btn--primary btn--sm" href={manageHref} target="_blank" rel="noreferrer">
+                <PlaybookIcon size={14} /> Create a playbook
+              </a>
+            </div>
+          </>
+        ) : (
+          <span className="small muted">
+            Open a contract that shows your usual positions and use "New playbook from this contract"
+            above. Then run it here against any document.
+          </span>
+        )}
       </div>
     ) : (
       <span className="small muted">No playbooks match your search.</span>

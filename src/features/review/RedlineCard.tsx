@@ -280,7 +280,7 @@ export function RedlineCard({
     try {
       // Prefer the bookmark anchor if one was placed for this clause: it survives
       // edits that would defeat a text search. Falls back to searching the text.
-      if (await goToBookmark(`Vaquill_clause_${index + 1}`)) return;
+      if (await goToBookmark(`ArkLaw_clause_${index + 1}`)) return;
       const found = await selectClauseInDocument(active.currentLanguage);
       if (!found) setNote("Could not locate this clause in the document.");
     } catch (e) {
@@ -546,12 +546,12 @@ export function RedlineCard({
       }),
   });
   overflowItems.push({
-    label: "Find US authority",
+    label: "Find Australian law",
     icon: <BookIcon size={14} />,
     onSelect: () =>
       navigate("assistant", {
         kind: "assistantAsk",
-        prompt: `Find the controlling US case law or statute relevant to the "${active.clauseName}" clause in this contract. Give the citation(s) and briefly explain how each applies to this position.`,
+        prompt: `Which Australian legislation or case law is most relevant to the "${active.clauseName}" clause in this contract? Name each Act and section, or each case, and briefly explain how it applies to this position. Only name sources you are sure exist, and say plainly if you are not sure.`,
         scope: "document",
         autoSend: true,
         // Corpus ON (NOT document-only): this is the research-grounding case, so
@@ -587,7 +587,13 @@ export function RedlineCard({
               <GroundingBadge grounding={active.grounding} />
               {improved && <Badge tone="green">Stronger fix</Badge>}
               {isEdited && <Badge tone="brand">Edited</Badge>}
+              {redline.fromInstruction && <Badge tone="brand">As you asked</Badge>}
             </div>
+            {/* Which typed instruction this card carries out, read from the
+                original redline (a "stronger fix" rewrite does not carry it). */}
+            {redline.fromInstruction && (
+              <span className="small muted redline__asked">You asked: {redline.fromInstruction}</span>
+            )}
             {/* The distilled intent is only a useful subtitle when the full
                 rationale is hidden behind the "Why this change" toggle; when the
                 rationale is shown inline below, this line just duplicates it (and

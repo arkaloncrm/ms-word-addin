@@ -224,7 +224,7 @@ export function useVoiceInput(onTranscript: (text: string) => void) {
     teardown();
     setError(null);
     const rec = new Ctor();
-    rec.lang = "en-US";
+    rec.lang = "en-AU";
     rec.continuous = true;
     rec.interimResults = true;
     let finalText = "";

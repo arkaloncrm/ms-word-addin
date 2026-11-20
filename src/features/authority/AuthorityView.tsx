@@ -13,6 +13,7 @@ import { insertTableOfAuthorities } from "@/office/citations";
 import { canAnnotate, paintCritiques, clearCritiques, type CritiqueItem } from "@/office/annotations";
 import type { AuthorityResult } from "@/api/authority";
 import { citationAuthorityAvailable } from "@/community/gating";
+import { isCommunity } from "@/community/edition";
 import { UpgradeGate } from "@/ui/UpgradeGate";
 import "./authority.css";
 
@@ -122,19 +123,30 @@ export function AuthorityView() {
   if (state.status === "idle") {
     return (
       <div className="stack authority-view">
-        <ViewHeader
-        title="Authority check"
-        info="Checks every case and statute citation in the document against Vaquill AI's US corpus. Found means a real matching authority exists, not that it is still good law, so confirm its current treatment before relying on it. No match can mean a hallucinated, mis-typed, or unreported citation, so confirm it yourself before you rely on it or file."
-        subtitle="Verify every case and statute citation in this document against Vaquill AI's US corpus. Catch citations that do not resolve to a real authority before you file or send."
-      />
+        {isCommunity() ? (
+          // ArkLaw checks case citations against CourtListener, a free database
+          // of US court decisions. Say so plainly: Australian cases and
+          // legislation are not checked yet (the Legal Sources build adds them).
+          <ViewHeader
+            title="Authority check"
+            info="Checks the US case citations in the document against CourtListener, a free database of US court decisions. Found means a matching case exists, not that it is still good law. No match can mean a made-up, mistyped or unreported citation, so check it yourself before you rely on it. Australian cases and legislation are not checked yet."
+            subtitle="Check that the US case citations in this document point to real decisions. Australian citations are not checked yet."
+          />
+        ) : (
+          <ViewHeader
+            title="Authority check"
+            info="Checks every case and statute citation in the document against the hosted US corpus. Found means a real matching authority exists, not that it is still good law, so confirm its current treatment before relying on it. No match can mean a hallucinated, mis-typed, or unreported citation, so confirm it yourself before you rely on it or file."
+            subtitle="Verify every case and statute citation in this document against the hosted US corpus. Catch citations that do not resolve to a real authority before you file or send."
+          />
+        )}
         {citationAuthorityAvailable() ? (
           <Button variant="primary" className="btn--cta" onClick={run}>
             Check citations
           </Button>
         ) : (
-          <UpgradeGate title="Statute & good-law checks are on the hosted plan">
-            To check whether cited cases exist, add your free CourtListener API token in Settings.
-            Full statute verification and good-law treatment are part of the Vaquill AI hosted plan.
+          <UpgradeGate title="Add a CourtListener token to check US case citations" notYet={false}>
+            Add your free CourtListener API token in Settings to check that US case citations are
+            real. It does not cover Australian cases, legislation or good-law checks yet.
           </UpgradeGate>
         )}
       </div>
@@ -170,9 +182,9 @@ export function AuthorityView() {
 
       {state.status === "done" && state.total === 0 && (
         <Banner tone="info">
-          No case or statute citations were found. This looks for US authority cites such as
-          "347 U.S. 483", "18 U.S.C. § 1030", or "Cal. Civ. Code § 1950.5". Contracts and NDAs
-          usually have none, so run it on a brief, memo, or opinion that cites case law.
+          No US case or statute citations were found. This looks for US-style citations such as
+          "347 U.S. 483" or "18 U.S.C. § 1030". Australian citations such as "[1992] HCA 23" or
+          "Privacy Act 1988 (Cth) s 6" are not checked yet.
         </Banner>
       )}
 

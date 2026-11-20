@@ -14,7 +14,7 @@ import type { RedlineSuggestion } from "@/api/types";
 
 /** Stable, Word-valid bookmark name for a redline (no spaces). */
 function bookmarkName(index: number): string {
-  return `Vaquill_clause_${index + 1}`;
+  return `ArkLaw_clause_${index + 1}`;
 }
 
 /**

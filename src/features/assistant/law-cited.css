@@ -1,0 +1,73 @@
+/* "Law cited": Acts and sections in an Ask answer, checked on the official register. */
+.law-cited {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--fill-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.law-cited__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+.law-cited__list,
+.law-cited__sections {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.law-cited__sections {
+  margin: 2px 0 0 18px;
+}
+.law-cited__line {
+  font-size: 13px;
+}
+.law-cited__icon {
+  display: inline-block;
+  width: 14px;
+  font-weight: 700;
+}
+.law-cited__section {
+  font-size: 12px;
+}
+.law-cited__toggle {
+  text-align: left;
+  font-size: 12px;
+}
+.law-cited__text {
+  margin: 4px 0 2px;
+  padding: 6px 8px;
+  border-left: 3px solid var(--border);
+  /* The law itself reads in normal text colour, not the green "found" tick colour. */
+  color: var(--text);
+  white-space: pre-wrap;
+  font-size: 12px;
+  max-height: 260px;
+  overflow: auto;
+}
+.law-cited__note {
+  display: block;
+}
+.law-cited--ok > .law-cited__line .law-cited__icon,
+.law-cited__section.law-cited--ok {
+  color: var(--success, #107c10);
+}
+.law-cited--warn > .law-cited__line .law-cited__icon {
+  color: var(--warning, #8a5a00);
+}
+.law-cited--bad > .law-cited__line .law-cited__icon,
+.law-cited__section.law-cited--bad {
+  color: var(--danger, #a4262c);
+}
+.law-cited__credit {
+  margin: 2px 0 0;
+  font-size: 11px;
+}

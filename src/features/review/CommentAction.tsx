@@ -150,7 +150,7 @@ export function CommentAction({
       // Anchor on the clause bookmark if present (survives edits), else locate the
       // clause text. Both select the range, so the comment lands on the clause.
       const located =
-        (await goToBookmark(`Vaquill_clause_${index + 1}`)) ||
+        (await goToBookmark(`ArkLaw_clause_${index + 1}`)) ||
         (await selectClauseInDocument(redline.currentLanguage));
       if (!located) {
         // Same root cause as applyVerifiedRedline: a clause whose own edits are

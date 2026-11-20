@@ -1,3 +1,4 @@
+import { COUNTRY_CODE } from "@/lib/region";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   streamContractReview,
@@ -138,10 +139,10 @@ export function useReview() {
       const base = {
         contractType: params.contractType,
         userSide: params.userSide,
-        // Top-level jurisdiction is the country code (US). The chosen US state
+        // Top-level jurisdiction is the country code (AU). The chosen state
         // travels in dealContext.governingLaw; putting a state name in
         // `jurisdiction` 422s (backend pattern ^([A-Z]{2}|INTL)$).
-        jurisdiction: "US",
+        jurisdiction: COUNTRY_CODE,
         dealContext: params.jurisdiction ? { governingLaw: params.jurisdiction } : undefined,
         playbookId: params.playbookId,
         reviewInstructions,

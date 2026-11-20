@@ -41,7 +41,7 @@ function StatusBanner({ ledger }: { ledger: GovernanceLedger }) {
         </p>
         <p className="small muted" style={{ margin: "4px 0 0" }}>
           {ledger.signoffEnforced
-            ? `Authority checked by Vaquill AI${roleLabel ? ` (recorded as ${roleLabel})` : ""}.`
+            ? `Authority checked${roleLabel ? ` (recorded as ${roleLabel})` : ""}.`
             : "Recorded as an in-file attestation. Authority was not verified."}
         </p>
       </div>
@@ -87,7 +87,7 @@ function SignoffAction({
         <label>Add a note (optional)</label>
         <AutoTextarea
           value={note}
-          placeholder="e.g. Approved the New York to Delaware change."
+          placeholder="e.g. Approved the change from Victorian to New South Wales law."
           onChange={(e) => setNote(e.target.value)}
         />
       </div>
@@ -98,7 +98,7 @@ function SignoffAction({
       <p className="small muted" style={{ margin: 0 }}>
         {enforced
           ? "Your authority is checked on the server before this is recorded."
-          : "Stamps your name and level as an attestation in the file (not authority-checked). Save to Vaquill AI first for an enforced approval."}
+          : "Stamps your name and level as an attestation in the file (not authority-checked)."}
       </p>
     </div>
   );
@@ -131,7 +131,7 @@ function LockControl() {
     <div className="gov-action stack">
       <span className="small" style={{ fontWeight: 600 }}>Lock the approved terms</span>
       <p className="small muted" style={{ margin: 0 }}>
-        Make the fields Vaquill AI tagged (amounts, dates, defined terms) read-only, so nobody edits the
+        Make the fields ArkLaw tagged (amounts, dates, defined terms) read-only, so nobody edits the
         approved numbers after sign-off.
       </p>
       <Button variant={locked ? "default" : "primary"} className="btn--cta" loading={busy} onClick={toggle}>
@@ -228,7 +228,7 @@ export function GovernanceView() {
       <div className="stack governance-view">
         <ViewHeader
         title="Sign-off"
-        info="The approval record is stored inside this .docx, so it travels with the file even when it is emailed on. It is a tamper-EVIDENT attestation (it flags accidental edits, but the pane does not verify the signer's authority). Record your approval to attest that the required manager, partner, or GC sign-off was obtained; the authority-enforced approval lives in the Vaquill AI web app."
+        info="The approval record is stored inside this .docx, so it travels with the file even when it is emailed on. It is a tamper-EVIDENT attestation (it flags accidental edits, but the pane does not verify the signer's authority). Record your approval to attest that the required manager, partner, or GC sign-off was obtained."
         subtitle="This document has no sign-off record yet."
       />
         <Banner tone="info">
@@ -265,7 +265,7 @@ export function GovernanceView() {
 
       {integrity === "modified" && (
         <p className="small muted" style={{ margin: 0 }}>
-          This record was changed outside Vaquill AI. Re-run the review to re-establish it.
+          This record was changed outside ArkLaw. Re-run the review to re-establish it.
         </p>
       )}
 

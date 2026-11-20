@@ -9,11 +9,11 @@ import type { TourDef } from "../types";
  */
 export const welcomeTour: TourDef = {
   id: "welcome",
-  title: "Welcome to Vaquill AI for Word",
+  title: "Welcome to ArkLaw",
   summary: "A 60-second lap of every tab.",
   steps: [
     {
-      title: "Welcome to Vaquill AI for Word",
+      title: "Welcome to ArkLaw",
       body: "Everything here works on the contract open in Word. Here is the 60-second lap of what each tab does.",
     },
     {
@@ -21,7 +21,7 @@ export const welcomeTour: TourDef = {
       target: tabSel("assistant"),
       placement: "bottom",
       title: "Assistant",
-      body: "Ask anything about the open contract, grounded in your document and US law. Ask a question, or switch to Edit to redline it.",
+      body: "Ask anything about the open contract, grounded in your document and Australian law. Ask a question, or switch to Edit to redline it.",
     },
     {
       nav: { tab: "review" },

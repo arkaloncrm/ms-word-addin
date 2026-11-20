@@ -1,9 +1,12 @@
+import { regulationForPrompt } from "@/features/compliance/regulations";
+import { COUNTRY_CODE } from "@/lib/region";
 import { ApiError } from "@/api/errors";
 import { uuid } from "@/api/ids";
 import {
   citationStylePrompt,
   classifyContractPrompt,
   compliancePrompt,
+  draftHerePrompt,
   editDocumentPrompt,
   explainPrompt,
   guidelinesPrompt,
@@ -16,6 +19,10 @@ import {
   rewritePrompt,
   riskPrompt,
 } from "@/ai/prompts";
+import { normalizeParties } from "@/lib/parties";
+import { listDefinedTerms } from "@/lib/defined-terms";
+import { shapeDraftHere } from "@/features/drafthere/shape";
+import { DRAFT_HERE_PATH } from "@/api/draft-here";
 import { searchCitation } from "./courtlistener";
 import { getDraftRow, startDraft } from "./draft";
 import { runJson } from "./llm";
@@ -93,7 +100,7 @@ function requiresAccount(): never {
   throw new ApiError(
     "unknown",
     0,
-    "This feature needs a Vaquill AI account and is not available in the community edition.",
+    "This feature is not available in ArkLaw yet.",
     "REQUIRES_ACCOUNT",
   );
 }
@@ -106,12 +113,12 @@ async function handleLlm(path: string, body: Record<string, unknown>): Promise<u
         str(body.instruction, "Rewrite for clarity and legal precision"),
         str(body.mode, "rewrite"),
         str(body.tone, "balanced"),
-        str(body.jurisdiction, "US"),
+        str(body.jurisdiction, COUNTRY_CODE),
       );
       return runJson(p.system, p.user);
     }
     case "/api/v1/drafting/clause/explain": {
-      const p = explainPrompt(str(body.clause_text), str(body.jurisdiction, "US"));
+      const p = explainPrompt(str(body.clause_text), str(body.jurisdiction, COUNTRY_CODE));
       return runJson(p.system, p.user);
     }
     case "/api/v1/legal-tools/plain-english": {
@@ -125,7 +132,7 @@ async function handleLlm(path: string, body: Record<string, unknown>): Promise<u
     case "/api/v1/legal-tools/compliance-check": {
       const p = compliancePrompt(
         str(body.documentText),
-        str(body.regulationType),
+        regulationForPrompt(str(body.regulationType)),
         str(body.documentCategory, "other"),
       );
       return runJson(p.system, p.user);
@@ -169,6 +176,7 @@ async function handleLlm(path: string, body: Record<string, unknown>): Promise<u
       return {
         contractType: typeof raw.contractType === "string" ? raw.contractType : null,
         confidence: typeof raw.confidence === "number" ? raw.confidence : 0.5,
+        parties: normalizeParties(raw.parties),
       };
     }
     case "/api/v1/playbook-fit/check": {
@@ -177,6 +185,22 @@ async function handleLlm(path: string, body: Record<string, unknown>): Promise<u
       ) as Record<string, { standardPosition: string; fallbackLadder: string[]; dealBreaker: string | null }>;
       const p = playbookFitPrompt(str(body.documentText), positions);
       return runJson(p.system, p.user);
+    }
+    case DRAFT_HERE_PATH: {
+      // "Draft here": one clause at the cursor, in the contract's own terms.
+      const documentText = str(body.documentText);
+      const heading = str(body.heading);
+      const p = draftHerePrompt({
+        documentText,
+        heading,
+        note: str(body.note),
+        instructions: str(body.instructions),
+        definedTerms: listDefinedTerms(documentText),
+        sameLine: body.placement === "same-line",
+        governingLaw: str(body.jurisdiction),
+        previousAttempt: str(body.previousAttempt),
+      });
+      return shapeDraftHere(await runJson(p.system, p.user), heading);
     }
     case "/api/v1/drafting/edit-document":
       // Whole-document instruction edits run on the user's own model. Not
@@ -523,7 +547,7 @@ async function handleClausesCrud(
         name: str(body.name),
         clauseType: str(pick(body, "clause_type", "clauseType"), "custom"),
         content: str(body.content),
-        jurisdiction: str(body.jurisdiction, "US"),
+        jurisdiction: str(body.jurisdiction, COUNTRY_CODE),
         tone: str(body.tone, "balanced"),
         applicableActs: [],
         tags: strArray(body.tags),

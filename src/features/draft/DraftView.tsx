@@ -26,6 +26,8 @@ import { AttachmentChips } from "@/features/assistant/AttachmentChips";
 import { insertDraftFormatted } from "@/office/richInsert";
 import { JURISDICTIONS, labelOf } from "@/features/review/constants";
 import { getReviewPrefs } from "@/lib/prefs";
+import { COUNTRY_CODE } from "@/lib/region";
+import { isCommunity } from "@/community/edition";
 import { SaveToVaquill } from "@/features/integration/SaveToVaquill";
 import { useAppNav } from "@/app/nav";
 import { config } from "@/config";
@@ -34,6 +36,8 @@ import { FillView } from "@/features/fill/FillView";
 import { ClauseLibraryView } from "@/features/clauses/ClauseLibraryView";
 import { type DraftMode } from "./mode";
 import { ApiError, errorMessage } from "@/api/errors";
+import { SourceNote } from "@/ui/SourceNote";
+import { DraftHereCard } from "@/features/drafthere/DraftHereCard";
 import "./draft.css";
 
 type Status = "idle" | "generating" | "done" | "error";
@@ -122,10 +126,10 @@ export function DraftView() {
     const params: DraftParams = {
       category,
       title: title.trim() || labelOf(DRAFT_CATEGORIES, category),
-      // The backend requires a governing law for US drafts. JURISDICTIONS
-      // values are US state codes (or "" for general); "" maps to the
-      // "federal" sentinel (multi-state / federal). Omitting it 422s.
-      governingLawState: jurisdiction || "federal",
+      // Always send a governing law. JURISDICTIONS values are Australian state
+      // and territory codes, or "" for Australia as a whole, which is sent as
+      // the country code. The prompt names it in full (lawName in lib/region).
+      governingLawState: jurisdiction || COUNTRY_CODE,
       tone,
       specialInstructions: instructions,
       referenceDocumentIds: refs.refIds(),
@@ -257,6 +261,10 @@ export function DraftView() {
           )}
         </div>
 
+        <SourceNote>
+          written by AI from your inputs, not copied from a precedent. Check it before you rely on it.
+        </SourceNote>
+
         {result.sections.length > 0 && (
           <div className="stack" style={{ gap: 2 }}>
             <h3 className="small muted">Sections</h3>
@@ -362,19 +370,36 @@ export function DraftView() {
         info="Generates a first-draft agreement from your inputs and inserts it into the document. Treat it as a starting point, not a final draft: review the language, run it through Review, and get the required sign-off before you send it."
       />
         <p className="small muted" style={{ margin: 0 }}>
-          Generate a first-draft agreement and insert it into this document.
+          {isCommunity()
+            ? "Write one clause at your cursor, or generate a whole first-draft agreement."
+            : "Generate a first-draft agreement and insert it into this document."}
         </p>
-        <p className="small muted" style={{ margin: 0 }}>
-          <a href={`${config.appBase}/templates`} target="_blank" rel="noreferrer">
-            Browse templates
-          </a>{" "}
-          or{" "}
-          <a href={`${config.appBase}/drafting`} target="_blank" rel="noreferrer">
-            open your saved drafts
-          </a>{" "}
-          in Vaquill AI.
-        </p>
+        {/* Templates and saved drafts live in a hosted web app ArkLaw does not
+            have, so these links only show outside ArkLaw. */}
+        {!isCommunity() && (
+          <p className="small muted" style={{ margin: 0 }}>
+            <a href={`${config.appBase}/templates`} target="_blank" rel="noreferrer">
+              Browse templates
+            </a>{" "}
+            or{" "}
+            <a href={`${config.appBase}/drafting`} target="_blank" rel="noreferrer">
+              open your saved drafts
+            </a>{" "}
+            in the web app.
+          </p>
+        )}
       </div>
+
+      {/* One clause at the cursor (ArkLaw only: it runs on the lawyer's own AI
+          key; there is no hosted endpoint for it). */}
+      {isCommunity() && (
+        <>
+          <DraftHereCard />
+          <h2 className="small" style={{ margin: "4px 0 0", fontWeight: 600 }}>
+            Or draft a whole agreement
+          </h2>
+        </>
+      )}
 
       <div className="form-grid">
         {/* The two dropdowns pair on one row; Title (free text) gets its own full
