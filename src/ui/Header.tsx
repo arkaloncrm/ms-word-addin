@@ -1,13 +1,20 @@
 import type { ReactNode } from "react";
 
-/** App header: the ArkLaw scales mark plus the ArkLaw wordmark. */
+/**
+ * App header shown before setup is finished (the first screen a new user sees):
+ * the full ArkLaw logo, ark and document symbol plus wordmark, as crisp vector
+ * art. Once signed in, the compact app bar shows the symbol alone.
+ */
 export function Header({ right }: { right?: ReactNode }) {
   return (
     <header className="app-header">
-      <div className="row" style={{ gap: 8 }}>
-        <img src="/assets/icon-80.png" width={22} height={22} alt="" className="app-header__mark" />
-        <span className="app-header__wordmark">ArkLaw</span>
-      </div>
+      <img
+        src="/assets/brand/arklaw-logo-horizontal.svg"
+        alt="ArkLaw"
+        height={28}
+        width={149}
+        className="app-header__logo"
+      />
       {right}
     </header>
   );
