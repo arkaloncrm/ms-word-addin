@@ -8,6 +8,7 @@ import {
   draftHerePrompt,
   explainPrompt,
   GROUNDING,
+  LEGISLATION_CITING,
   REVIEW_INSTRUCTION_RULES,
   rewritePrompt,
 } from "./prompts";
@@ -143,6 +144,19 @@ describe("contractReviewPrompt", () => {
 
   it("tells the AI to report instructions it could not carry out", () => {
     expect(REVIEW_INSTRUCTION_RULES).toContain('"Instruction not carried out"');
+  });
+});
+
+describe("assistantSystem and legislation", () => {
+  it("asks for legislation to be cited in a form the register can check", () => {
+    expect(assistantSystem("")).toContain(LEGISLATION_CITING);
+    expect(LEGISLATION_CITING).toContain('"section 6 of the Privacy Act 1988 (Cth)"');
+  });
+
+  it("adds the official section text when there is some", () => {
+    expect(assistantSystem("", "\n\nOfficial text from the Federal Register of Legislation ...")).toContain(
+      "Official text from the Federal Register of Legislation",
+    );
   });
 });
 

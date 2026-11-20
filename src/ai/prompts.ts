@@ -30,8 +30,16 @@ export const GROUNDING =
 
 const JSON_ONLY = "Respond with ONLY a single valid JSON object matching the schema. No prose, no markdown code fences.";
 
-/** Grounded assistant chat over the open document (streamed). */
-export function assistantSystem(context: string): string {
+/**
+ * How Ask should cite legislation, so ArkLaw can check each citation against
+ * the Federal Register of Legislation (see src/legal) and link to it.
+ */
+export const LEGISLATION_CITING =
+  ' When you cite legislation, name the Act in full with its year and jurisdiction, and the section, for example "section 6 of the Privacy Act 1988 (Cth)", so the lawyer can check it against the official register.';
+
+/** Grounded assistant chat over the open document (streamed). `officialText` is
+ *  section text fetched from the Federal Register of Legislation, if any. */
+export function assistantSystem(context: string, officialText = ""): string {
   const doc = context && context.trim()
     ? `\n\nThe user has a document open in Word. Ground your answer in it and quote it where relevant:\n"""\n${context.slice(0, 400_000)}\n"""`
     : "\n\nThe user has no document text attached; answer from general knowledge and say when you are unsure.";
@@ -40,7 +48,7 @@ export function assistantSystem(context: string): string {
   const quoting = context && context.trim()
     ? " When a point relies on the document, quote its exact words in double quotation marks, copied verbatim, and name the clause number, so the lawyer can click the quote to see it in the document."
     : "";
-  return `${GROUNDING} Answer the lawyer's question clearly and directly.${quoting}${doc}`;
+  return `${GROUNDING} Answer the lawyer's question clearly and directly.${quoting}${LEGISLATION_CITING}${doc}${officialText}`;
 }
 
 export function rewritePrompt(

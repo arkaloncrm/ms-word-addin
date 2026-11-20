@@ -12,6 +12,7 @@ import { FileTypeIcon } from "@/ui/fileIcons";
 import { Avatar } from "@/ui/Avatar";
 import { getUser } from "@/auth/session";
 import { SaveAnswerToNotes } from "@/features/integration/SaveAnswerToNotes";
+import { LawCited } from "./LawCited";
 
 /** Signed-in user's name + photo for the avatar (Google OAuth picture when
  *  present; the Avatar falls back to initials if there is no photo). */
@@ -335,6 +336,9 @@ export function MessageBubble({
           anchorId={anchorId}
         />
       )}
+      {/* Every Commonwealth Act and section the answer cites, checked on the
+          official register, once the answer has finished. */}
+      {message.content && !message.pending && <LawCited text={message.content} />}
       {message.content && !message.pending && <AssistantActions message={message} />}
     </div>
   );
