@@ -1,7 +1,7 @@
 import { ApiError } from "@/api/errors";
 import { readSse } from "./sse";
 import type { ChatAttachment, ChatRequest, LlmProvider, ProviderId } from "./types";
-import { chatCompletionsFinish } from "./types";
+import { chatCompletionsFinish, isOutOfCredit, outOfCreditMessage, providerErrorMessage } from "./types";
 
 /**
  * A single part of a multimodal Chat Completions message. Plain text messages
@@ -38,6 +38,8 @@ function partFor(a: ChatAttachment): OpenAiPart | null {
 const ENDPOINT = "https://api.openai.com/v1/chat/completions";
 
 function mapError(brand: string, status: number, body: string): ApiError {
+  // OpenAI reports no credit as HTTP 429 insufficient_quota: not a "wait a moment".
+  if (isOutOfCredit(body)) return new ApiError("quota", status, outOfCreditMessage(brand), "OUT_OF_CREDIT");
   if (status === 401 || status === 403)
     return new ApiError(
       "unauthorized",
@@ -49,7 +51,13 @@ function mapError(brand: string, status: number, body: string): ApiError {
     return new ApiError("rate_limited", 429, `${brand} rate-limited this request. Wait a moment and try again.`);
   if (status >= 500)
     return new ApiError("server", status, `${brand} is unavailable right now. Please try again.`);
-  return new ApiError("invalid", status, body.slice(0, 300) || `${brand} rejected the request.`);
+  // The provider's sentence, never its raw JSON (or an HTML error page).
+  const said = providerErrorMessage(body);
+  return new ApiError(
+    "invalid",
+    status,
+    said ? `${brand} rejected the request: ${said.slice(0, 300)}` : `${brand} rejected the request (error ${status}).`,
+  );
 }
 
 function messagesFor(req: ChatRequest): { role: string; content: string | OpenAiPart[] }[] {
@@ -162,6 +170,7 @@ export function makeChatCompletions(cfg: ChatCompletionsConfig): LlmProvider {
           return; // Keepalive or partial frame; ignore.
         }
         if (j.error) {
+          if (isOutOfCredit(j.error.message ?? "")) throw new ApiError("quota", 0, outOfCreditMessage(brand), "OUT_OF_CREDIT");
           throw new ApiError("invalid", 0, `${brand} stopped the answer part-way: ${j.error.message ?? "unknown error"}.`);
         }
         const piece = j.choices?.[0]?.delta?.content;
