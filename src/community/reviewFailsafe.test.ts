@@ -20,7 +20,7 @@ import {
 } from "./reviewStream";
 import { IncompleteAnswerError, runJson } from "./llm";
 import { contractReviewPrompt, normalizeReviewDepth, REVIEW_MATERIALITY_RULES, REVIEW_MAX_CHARS } from "@/ai/prompts";
-import { MAX_DOCUMENT_CHARS, streamError } from "@/api/contract-review";
+import { INCOMPLETE_RESULT_MESSAGE, isReviewResult, MAX_DOCUMENT_CHARS, streamError } from "@/api/contract-review";
 import { errorMessage } from "@/api/errors";
 import type { RedlineSuggestion } from "@/api/types";
 
@@ -161,6 +161,15 @@ describe("communityReviewStream never reports a failed review as clean", () => {
     expect(errorMessage(streamError(JSON.stringify({ message: msg }), "The review failed."))).toBe(msg);
     // No message at all: still an error, never a result.
     expect(errorMessage(streamError("{}", "The review failed."))).toContain("Please try again");
+  });
+
+  it("the review screen accepts only a result that carries its list of changes", () => {
+    expect(isReviewResult({ redlines: [] })).toBe(true); // completed, nothing found
+    expect(isReviewResult({ redlines: [{}] })).toBe(true);
+    expect(isReviewResult({})).toBe(false); // the old false-clean shape
+    expect(isReviewResult(null)).toBe(false);
+    expect(isReviewResult({ redlines: "none" })).toBe(false);
+    expect(INCOMPLETE_RESULT_MESSAGE).toContain("Nothing has been marked as reviewed or clean");
   });
 
   it("keeps the review pass limit in step with the section size", () => {
