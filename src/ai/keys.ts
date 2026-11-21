@@ -57,10 +57,12 @@ export const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
     { id: "gpt-5.5", label: "GPT-5.5 (highest quality)" },
   ],
   // Current Claude models (IDs from Anthropic's model list, Nov 2026). The
-  // default (below) was chosen by a measured comparison on the fictional sample
-  // contract; see the PR that introduced this list.
+  // default (below) was chosen by measurement on the fictional sample contract
+  // (eval/reviewModels.eval.test.ts, 21 Nov 2026, Balanced mode): Sonnet 5.5 and
+  // Opus 5.5 both found all 10 planted problems; Sonnet 5.5 cost about US$0.27 a
+  // review against Opus's US$0.46, and was a little faster (170s against 192s).
   anthropic: [
-    { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5" },
+    { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5 (recommended)" },
     { id: "claude-opus-5-5", label: "Claude Opus 5.5 (highest quality)" },
     { id: "claude-haiku-5-5", label: "Claude Haiku 5.5 (fastest, lowest cost)" },
     { id: "claude-sonnet-5", label: "Claude Sonnet 5 (previous generation)" },
@@ -85,7 +87,7 @@ export const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
 
 const DEFAULT_MODEL: Record<ProviderId, string> = {
   openai: "gpt-5.4-mini",
-  anthropic: "claude-sonnet-5",
+  anthropic: "claude-sonnet-5-5",
   gemini: "gemini-4-hydrogen",
   groq: "openai/gpt-oss-120b",
   ollama: "llama3.1",

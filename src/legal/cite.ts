@@ -3,7 +3,9 @@
 // LICENSE-australian-law-mcp.txt in this folder. Changed for ArkLaw: the
 // jurisdiction tag ("(Cth)", "(NSW)" ...) is now kept on each citation, so a
 // state Act is never checked against the Commonwealth register and reported as
-// missing.
+// missing. Also (21 Nov 2026): subsection citations ("subsection 6(1)",
+// "s 6(1)(a)") bind to their section, and markdown emphasis around an Act name
+// no longer stops a section binding to it.
 //
 // Pulls Australian statute citations out of free text so they can be checked
 // against the register. Heuristic by design: it aims at the citation shapes
@@ -40,12 +42,16 @@ const ACT_NAME = new RegExp(
 // en dash or em dash between two numbers is a range instead. The letter suffix
 // runs long in practice — Crimes Act "3ZQZB", ITAA 1936 "159GZZZZH".
 const NUM = String.raw`\d+[A-Z]{0,8}(?:[-‐‑.]\d+[A-Z]{0,8})?`;
-const LABEL = String.raw`sections?|ss?|§|regulations?|regs?|rules?|clauses?|cls?`;
+// ArkLaw: a subsection or paragraph tail ("6(1)", "6(1)(a)") is read past, so
+// the citation binds to its section, which is what the register checks.
+const SUB = String.raw`(?:\([0-9A-Z]{1,4}\))*`;
+// ArkLaw: "subsection 6(1)" and "sub-section 6(1)" cite section 6.
+const LABEL = String.raw`sub-?sections?|sections?|ss?|§|regulations?|regs?|rules?|clauses?|cls?`;
 const SECTION_REF = new RegExp(
-  String.raw`\b(?:${LABEL})\s*\.?\s*(${NUM})(?:\s*[–—]\s*(${NUM}))?`,
+  String.raw`\b(?:${LABEL})\s*\.?\s*(${NUM})${SUB}(?:\s*[–—]\s*(${NUM})${SUB})?`,
   'gi',
 );
-const SECTION_MORE = new RegExp(String.raw`^\s*(?:,|and|or)\s*(${NUM})\b`, 'i');
+const SECTION_MORE = new RegExp(String.raw`^\s*(?:,|and|or)\s*(${NUM})${SUB}(?!\w)`, 'i');
 
 interface Span {
   start: number;
@@ -85,7 +91,7 @@ function sectionSpans(text: string): Span[] {
 
 // "s 3A and s 999 of the Act" binds both sections, so sibling references are
 // stripped out of the gap before it is judged.
-const SIBLING = new RegExp(String.raw`\b(?:${LABEL})\s*\.?\s*${NUM}(?:\s*[–—]\s*${NUM})?`, 'gi');
+const SIBLING = new RegExp(String.raw`\b(?:${LABEL})\s*\.?\s*${NUM}${SUB}(?:\s*[–—]\s*${NUM}${SUB})?`, 'gi');
 const SIBLING_TEST = new RegExp(SIBLING.source, 'i');
 const AFTER_SECTION = /^[\s,]*(?:(?:and|or)[\s,]*)*(?:of|under|in|from)?\s*(?:the\s+)?$/i;
 // Act-first, plain adjacency: "... Act 1997 s 8-1".
@@ -104,7 +110,11 @@ function bridges(gap: string, sectionFirst: boolean): boolean {
   return SIBLING_TEST.test(gap) && AFTER_ACT_MORE.test(gap.replace(SIBLING, ' '));
 }
 
-export function parseCitations(text: string): Citation[] {
+export function parseCitations(answer: string): Citation[] {
+  // ArkLaw: answers are markdown, and Act names usually come in italics
+  // ("*Privacy Act 1988* (Cth)"). The markers would sit between a section and
+  // its Act and stop them binding, so they are read past.
+  const text = answer.replace(/[*_]+/g, '');
   const acts = actSpans(text);
   if (acts.length === 0) return [];
   // "Regulations 2001" inside a title looks exactly like a provision

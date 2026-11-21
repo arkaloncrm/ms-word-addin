@@ -75,6 +75,8 @@ export async function errorFromResponse(res: Response): Promise<ApiError> {
 export function friendlyMessage(err: ApiError): string {
   switch (err.kind) {
     case "quota":
+      // The AI provider's own "no credit left" message names what to do.
+      if (err.code === "OUT_OF_CREDIT") return err.message;
       return "You have reached your usage limit. Wait for it to reset, or check your plan.";
     case "too_large":
       return "This document is too large to review in full. Try selecting the section you want reviewed.";

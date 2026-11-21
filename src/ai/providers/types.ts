@@ -84,6 +84,34 @@ export function chatCompletionsFinish(finishReason: string | null | undefined): 
   return "incomplete";
 }
 
+/**
+ * The provider's own sentence from a JSON error body
+ * ({"error":{"message":"..."}}), so a lawyer never sees raw JSON. Null when the
+ * body isn't JSON or carries no message.
+ */
+export function providerErrorMessage(body: string): string | null {
+  try {
+    const j = JSON.parse(body) as { error?: { message?: unknown } | string; message?: unknown };
+    const m = j && typeof j.error === "object" && j.error ? j.error.message : j?.message;
+    return typeof m === "string" && m.trim() ? m.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * True when the provider says the account behind the key has no credit left
+ * (Anthropic: "credit balance is too low"; OpenAI: insufficient_quota).
+ */
+export function isOutOfCredit(text: string): boolean {
+  return /credit balance is too low|insufficient_quota|exceeded your current quota/i.test(text);
+}
+
+/** What the lawyer sees when the key's account has run out of credit. */
+export function outOfCreditMessage(brand: string): string {
+  return `${brand} says the account behind this key has run out of credit or reached its spending limit. Add credit in your ${brand} account, or ask whoever gave you the key.`;
+}
+
 export interface LlmProvider {
   id: ProviderId;
   chat(req: ChatRequest): Promise<ChatResult>;

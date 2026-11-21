@@ -1,6 +1,6 @@
 import { ApiError } from "@/api/errors";
 import { readSse } from "./sse";
-import { anthropicFinish } from "./types";
+import { anthropicFinish, isOutOfCredit, outOfCreditMessage, providerErrorMessage } from "./types";
 import type { ChatAttachment, ChatRequest, LlmProvider } from "./types";
 
 /**
@@ -40,6 +40,7 @@ const VERSION = "2023-06-01";
 export const DEFAULT_MAX_TOKENS = 16_000;
 
 function mapError(status: number, body: string): ApiError {
+  if (isOutOfCredit(body)) return new ApiError("quota", status, outOfCreditMessage("Anthropic"), "OUT_OF_CREDIT");
   if (status === 401)
     return new ApiError(
       "unauthorized",
@@ -51,7 +52,13 @@ function mapError(status: number, body: string): ApiError {
     return new ApiError("rate_limited", 429, "Anthropic rate-limited this request. Wait a moment and try again.");
   if (status >= 500)
     return new ApiError("server", status, "Anthropic is unavailable right now. Please try again.");
-  return new ApiError("invalid", status, body.slice(0, 300) || "Anthropic rejected the request.");
+  // The provider's sentence, never its raw JSON (or an HTML error page).
+  const said = providerErrorMessage(body);
+  return new ApiError(
+    "invalid",
+    status,
+    said ? `Anthropic rejected the request: ${said.slice(0, 300)}` : `Anthropic rejected the request (error ${status}).`,
+  );
 }
 
 function bodyFor(req: ChatRequest, model: string, stream: boolean): Record<string, unknown> {
@@ -146,13 +153,15 @@ export function makeAnthropic(apiKey: string, model: string): LlmProvider {
         } else if (j.type === "error") {
           // An error mid-stream (for example "overloaded") ends the answer early.
           // It must surface as a failure, never as a shorter answer.
+          if (isOutOfCredit(j.error?.message ?? ""))
+            throw new ApiError("quota", 0, outOfCreditMessage("Anthropic"), "OUT_OF_CREDIT");
           const overloaded = j.error?.type === "overloaded_error";
           throw new ApiError(
             overloaded ? "server" : "invalid",
             overloaded ? 529 : 0,
             overloaded
               ? "Anthropic is overloaded right now, so the answer stopped part-way. Please try again."
-              : `Anthropic stopped the answer part-way: ${j.error?.message ?? "unknown error"}.`,
+              : `Anthropic stopped the answer part-way: ${(j.error?.message ?? "unknown error").slice(0, 300)}.`,
           );
         }
       });
