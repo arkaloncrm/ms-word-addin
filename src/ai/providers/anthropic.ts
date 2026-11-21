@@ -161,7 +161,7 @@ export function makeAnthropic(apiKey: string, model: string): LlmProvider {
             overloaded ? 529 : 0,
             overloaded
               ? "Anthropic is overloaded right now, so the answer stopped part-way. Please try again."
-              : `Anthropic stopped the answer part-way: ${j.error?.message ?? "unknown error"}.`,
+              : `Anthropic stopped the answer part-way: ${(j.error?.message ?? "unknown error").slice(0, 300)}.`,
           );
         }
       });

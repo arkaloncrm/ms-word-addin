@@ -171,7 +171,7 @@ export function makeChatCompletions(cfg: ChatCompletionsConfig): LlmProvider {
         }
         if (j.error) {
           if (isOutOfCredit(j.error.message ?? "")) throw new ApiError("quota", 0, outOfCreditMessage(brand), "OUT_OF_CREDIT");
-          throw new ApiError("invalid", 0, `${brand} stopped the answer part-way: ${j.error.message ?? "unknown error"}.`);
+          throw new ApiError("invalid", 0, `${brand} stopped the answer part-way: ${(j.error.message ?? "unknown error").slice(0, 300)}.`);
         }
         const piece = j.choices?.[0]?.delta?.content;
         if (piece) {

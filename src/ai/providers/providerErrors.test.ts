@@ -109,6 +109,12 @@ describe("Anthropic: other rejections", () => {
     expect(errorMessage(e)).toBe("Anthropic rejected the request (error 400).");
   });
 
+  it("a long message part-way through an answer is cut to a readable length", async () => {
+    sse([{ type: "message_start" }, { type: "error", error: { type: "api_error", message: "x".repeat(5000) } }]);
+    const e = await failure(anthropic().stream(req, () => {}));
+    expect(errorMessage(e).length).toBeLessThan(400);
+  });
+
   it("a wrong key still says so", async () => {
     reply(401, JSON.stringify({ type: "error", error: { type: "authentication_error", message: "invalid x-api-key" } }));
     const e = await failure(anthropic().chat(req));
