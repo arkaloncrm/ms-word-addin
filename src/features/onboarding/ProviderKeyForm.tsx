@@ -248,10 +248,22 @@ export function ProviderKeyForm({ onSaved }: { onSaved?: () => void }) {
 
       {keyRequired ? (
         <Field label={`${PROVIDER_LABELS[provider]} API key`}>
+          {/* Not type="password": WebView2 (Word's browser engine) then offers
+              "Save your password?" after Save and would store the AI key in the
+              browser's password store. A text field masked by CSS
+              (.secret-input) shows dots without that prompt. */}
           <input
-            type="password"
+            type="text"
+            className="secret-input"
+            name="arklaw-ai-key"
             value={key}
             autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            data-1p-ignore
+            data-lpignore="true"
+            data-form-type="other"
             placeholder="Paste your key"
             onChange={(e) => {
               setKeyValue(e.target.value);

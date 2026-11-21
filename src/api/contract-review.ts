@@ -56,6 +56,28 @@ function safeParse<T>(data: string): T | null {
   }
 }
 
+/** Shown when a stream delivers a "result" that is not a usable review. */
+export const INCOMPLETE_RESULT_MESSAGE =
+  "Review not completed. The review result was incomplete. Nothing has been marked as reviewed or clean. Please try again.";
+
+/** A review result is usable only if it carries its list of changes (which
+ *  may be empty for a genuinely clean, COMPLETED review). Exported for tests. */
+export function isReviewResult(d: unknown): d is ContractReviewResponse {
+  return !!d && typeof d === "object" && Array.isArray((d as { redlines?: unknown }).redlines);
+}
+
+/**
+ * The error for a stream "error" event. When the event carries a message it is
+ * shown to the lawyer WORD FOR WORD (kind "unknown" makes errorMessage return
+ * it as is): the review's own message says what failed and that nothing was
+ * marked as reviewed or clean. Without a message, it stays a generic server
+ * error. Exported for tests.
+ */
+export function streamError(data: string, fallback: string): ApiError {
+  const message = safeParse<{ message?: string }>(data)?.message?.trim();
+  return message ? new ApiError("unknown", 0, message) : new ApiError("server", 0, fallback);
+}
+
 /**
  * Stream a contract review. Resolves when the `done` event arrives.
  * Throws ApiError on quota (402), size (413), or transport failures.
@@ -98,12 +120,16 @@ export async function streamContractReview(
         case "result": {
           // The review is nested under `data` (event payload is {type,data}).
           const r = safeParse<{ data?: ContractReviewResponse }>(data);
-          if (r?.data) handlers.onResult(r.data);
+          // Second line of defence (independent check, 21 Nov 2026): only a
+          // result that carries a list of changes is a review. Anything else
+          // is an error, never an empty ("clean") review, whichever backend
+          // sent it.
+          if (!isReviewResult(r?.data)) throw new ApiError("unknown", 0, INCOMPLETE_RESULT_MESSAGE);
+          handlers.onResult(r.data);
           break;
         }
         case "error": {
-          const e = safeParse<{ message?: string }>(data);
-          throw new ApiError("server", 0, e?.message ?? "The review failed.");
+          throw streamError(data, "The review failed.");
         }
         default:
           break; // done, heartbeats
@@ -218,8 +244,7 @@ export async function streamClauseFix(
           break;
         }
         case "error": {
-          const e = safeParse<{ message?: string }>(data);
-          throw new ApiError("server", 0, e?.message ?? "The fix could not be drafted.");
+          throw streamError(data, "The fix could not be drafted.");
         }
         default:
           break; // done, heartbeats

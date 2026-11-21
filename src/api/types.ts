@@ -25,6 +25,9 @@ export interface RedlineSuggestion {
    * insertion  = a missing clause to add (no anchor; insert at a chosen location)
    */
   grounding: Grounding;
+  /** Why a redline is "unverified" (not found word for word, or found more
+   *  than once), shown with the badge. See src/lib/grounding.ts. */
+  groundingNote?: string;
   approvalLevel?: ApprovalLevel | null;
   isDealBreaker: boolean;
   /**
@@ -34,6 +37,13 @@ export interface RedlineSuggestion {
    * which case the memo falls back to a severity heuristic for grouping.
    */
   nature?: "substantive" | "housekeeping";
+  /**
+   * The model's rating of how much this finding matters (high = deal-breaker or
+   * major exposure, medium = material and worth negotiating, low = minor or
+   * cosmetic). Optional: absent on older reviews, where the card falls back to
+   * the deal-breaker / approval heuristic in src/lib/severity.ts.
+   */
+  severity?: "high" | "medium" | "low";
   /**
    * The reviewer instruction this redline carries out ("probation to 3 months"),
    * when the lawyer typed instructions; null or absent for issues the AI raised
@@ -156,7 +166,15 @@ export interface ContractReviewResponse {
   counterpartyMatch?: CounterpartyMatch | null;
   /** "Flag for discussion" items: noticed but not redlined. */
   flags?: ReviewFlag[];
+  /** The review mode this result was produced in. */
+  reviewDepth?: ReviewDepth;
+  /** Minor cosmetic tidy-ups (housekeeping, low severity) left out of a
+   *  Critical or Balanced review. Shown as a count, never dropped silently. */
+  hiddenMinorCount?: number;
 }
+
+/** Review modes: Critical, Balanced (default), Comprehensive. */
+export type ReviewDepth = "critical" | "balanced" | "comprehensive";
 
 export interface ContractReviewRequest {
   documentText: string;
@@ -171,9 +189,10 @@ export interface ContractReviewRequest {
   playbookId?: string;
   reviewInstructions?: string;
   matterId?: string;
-  /** Markup aggressiveness: 'light' flags only escalation triggers, 'standard'
-   *  marks gaps to the preferred position, 'firm' hard-lines every deviation. */
-  markupLevel?: "light" | "standard" | "firm";
+  /** Review mode: 'critical' (material risks only), 'balanced' (material risks
+   *  plus worthwhile amendments, the default) or 'comprehensive' (also minor
+   *  drafting). Older light/standard/firm values are still accepted and mapped. */
+  markupLevel?: ReviewDepth | "light" | "standard" | "firm";
   /** Whose paper: 'own' = defend our template, 'counterparty' = mark up their
    *  form assertively. Orthogonal to userSide. Omit if unknown. */
   paperSide?: "own" | "counterparty";

@@ -80,11 +80,11 @@ export const JURISDICTIONS: Option[] = AU_JURISDICTIONS;
 
 export type ReviewScope = "document" | "selection";
 
-/** How aggressively to mark up (backend markup_level). */
+/** Review modes (sent as markup_level). Balanced is the default. */
 export const MARKUP_LEVELS: Option[] = [
-  { value: "standard", label: "Standard (mark gaps to preferred)" },
-  { value: "light", label: "Light (only escalation triggers)" },
-  { value: "firm", label: "Firm (hard-line every deviation)" },
+  { value: "balanced", label: "Balanced (material risks + changes worth negotiating)" },
+  { value: "critical", label: "Critical (material risks only)" },
+  { value: "comprehensive", label: "Comprehensive (includes minor drafting)" },
 ];
 
 /** Whose paper this is (backend paper_side). "" omits it. */

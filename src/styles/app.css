@@ -136,6 +136,36 @@
   background: var(--brand);
 }
 
+/* API keys and tokens: shown as dots without type="password", so Word's
+   browser engine never offers to save them in its password store. */
+.secret-input {
+  -webkit-text-security: disc;
+}
+
+/* Narrow task panes. Word's pane is often only about 300-350 px wide, and the
+   four tabs used to run off the right edge with no visible scrollbar, so Draft
+   and Tools could not be found. Keep every tab on screen: inactive tabs show
+   their icon only (the name stays in the tooltip and for screen readers via
+   aria-label); the active tab keeps its label. Very narrow: icons only. */
+@media (max-width: 420px) {
+  .appbar {
+    gap: 2px;
+    padding: 0 4px;
+  }
+  .tabnav__tab {
+    padding: 11px 8px;
+    gap: 5px;
+  }
+  .tabnav__tab:not(.tabnav__tab--on) .tabnav__label {
+    display: none;
+  }
+}
+@media (max-width: 300px) {
+  .tabnav__tab .tabnav__label {
+    display: none;
+  }
+}
+
 /* Second-level nav (e.g. the Review hub: Redlines / Citations / Sign-off). */
 .subnav {
   padding: 8px 10px;

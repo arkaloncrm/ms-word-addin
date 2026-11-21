@@ -584,7 +584,7 @@ export function RedlineCard({
               {active.approvalLevel && active.approvalLevel !== "none" && (
                 <Badge tone="yellow">{APPROVAL_LABEL[active.approvalLevel] ?? active.approvalLevel}</Badge>
               )}
-              <GroundingBadge grounding={active.grounding} />
+              <GroundingBadge grounding={active.grounding} note={active.groundingNote} />
               {improved && <Badge tone="green">Stronger fix</Badge>}
               {isEdited && <Badge tone="brand">Edited</Badge>}
               {redline.fromInstruction && <Badge tone="brand">As you asked</Badge>}

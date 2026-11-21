@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 // The review shaper is pure; the AI runner is not needed (and needs a browser).
-vi.mock("./llm", () => ({ runJson: vi.fn() }));
+// Keep the real error classes: the stream's error path checks them.
+vi.mock("./llm", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./llm")>()),
+  runJson: vi.fn(),
+}));
 
 import { communityDraftFixStream, communityReviewStream, shapeReview } from "./reviewStream";
 import { runJson } from "./llm";

@@ -4,34 +4,46 @@ import type {
   ReviewApprovalGate,
 } from "@/api/types";
 
+/** A line that starts a clause, schedule or part: the best place to start a new
+ *  section. Matches "14. Dispute Resolution", "Schedule 2 - Fees", "Part B". */
+const HEADING_LINE = /^(\d{1,3}\.?\s+\S|schedule\b|part\s+[a-z0-9]|annexure\b|appendix\b|attachment\b)/i;
+
 /**
  * Split document text into contiguous sections each at most `maxChars`, breaking
- * on paragraph boundaries so no clause is cut mid-sentence. A single paragraph
- * larger than the limit is hard-split as a last resort. Order is preserved, so a
- * redline's `currentLanguage` still exists verbatim in the full document and can
- * be anchored at apply time.
+ * BETWEEN paragraphs so no clause is cut mid-sentence. Word's structured text
+ * (readStructuredDocumentText) has ONE newline between paragraphs, so this
+ * splits on every newline, not only on blank lines: splitting only on blank
+ * lines treated a whole contract as one paragraph and cut it mid-sentence every
+ * `maxChars` characters. Once a section is 80% full it ends early at a clause or
+ * schedule heading, so a section usually starts at a heading. A single paragraph
+ * larger than the limit is hard-split as a last resort. Order and text are
+ * preserved exactly (the sections join back into the original), so a redline's
+ * `currentLanguage` still exists verbatim in the full document.
  */
 export function splitIntoSections(text: string, maxChars: number): string[] {
   if (text.length <= maxChars) return [text];
 
-  const paragraphs = text.split(/\n{2,}/);
+  // Keep each newline with the line before it, so joining the sections gives
+  // back the original text exactly.
+  const lines = text.match(/[^\n]*\n|[^\n]+$/g) ?? [text];
   const sections: string[] = [];
   let current = "";
 
   const flush = () => {
-    if (current.trim()) sections.push(current);
+    if (current) sections.push(current);
     current = "";
   };
 
-  for (const p of paragraphs) {
-    const block = `${p}\n\n`;
-    if (block.length > maxChars) {
+  for (const line of lines) {
+    if (line.length > maxChars) {
       flush();
-      for (let i = 0; i < p.length; i += maxChars) sections.push(p.slice(i, i + maxChars));
+      for (let i = 0; i < line.length; i += maxChars) sections.push(line.slice(i, i + maxChars));
       continue;
     }
-    if (current.length + block.length > maxChars) flush();
-    current += block;
+    const full = current.length + line.length > maxChars;
+    const goodBreak = current.length >= maxChars * 0.8 && HEADING_LINE.test(line.trimStart());
+    if (full || goodBreak) flush();
+    current += line;
   }
   flush();
 
@@ -99,13 +111,25 @@ export function mergeReviews(parts: ContractReviewResponse[]): ContractReviewRes
     `Missing-clause analysis is skipped in sectioned mode (no single section sees the whole contract). ` +
     sectionLines;
 
+  // Rank across all sections (high, medium, low), keeping document order within
+  // each severity, so the most important finding comes first wherever it is.
+  const rank = { high: 0, medium: 1, low: 2 } as const;
+  const redlines = parts
+    .flatMap((p) => p.redlines ?? [])
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => rank[a.r.severity ?? "medium"] - rank[b.r.severity ?? "medium"] || a.i - b.i)
+    .map(({ r }) => r);
+  const hidden = parts.reduce((sum, p) => sum + (p.hiddenMinorCount ?? 0), 0);
+
   return {
     ...first,
     summary,
     overallRisk,
-    redlines: parts.flatMap((p) => p.redlines ?? []),
+    redlines,
     negotiationPriorities: mergePriorities(parts),
     missingClauses: [],
     approvalGate: mergeGates(parts),
+    flags: parts.flatMap((p) => p.flags ?? []),
+    hiddenMinorCount: hidden,
   };
 }

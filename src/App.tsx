@@ -189,13 +189,18 @@ function AppShell() {
                   aria-controls="app-panel"
                   tabIndex={on ? 0 : -1}
                   className={`tabnav__tab ${on ? "tabnav__tab--on" : ""}`}
+                  // The label is hidden on narrow panes (see app.css), so the
+                  // name must also live on the button for tooltips and screen
+                  // readers.
+                  aria-label={t.label}
+                  title={t.label}
                   onClick={() => {
                     setShowSettings(false);
                     setTab(t.id);
                   }}
                 >
                   <t.icon size={15} />
-                  {t.label}
+                  <span className="tabnav__label">{t.label}</span>
                 </button>
               );
             })}
