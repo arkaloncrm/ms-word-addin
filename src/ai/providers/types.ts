@@ -47,8 +47,41 @@ export interface ChatRequest {
   signal?: AbortSignal;
 }
 
+/**
+ * Why the model stopped, normalised across providers. Only "complete" means the
+ * model finished its answer on its own. Everything else means the text may be
+ * cut off or missing, so callers that need a whole answer (a contract review)
+ * must treat it as a failure, never as a short or empty result.
+ * - truncated: hit the output-token limit (Anthropic max_tokens, OpenAI length)
+ * - refused: the provider's safety layer declined (Anthropic refusal,
+ *   OpenAI content_filter)
+ * - incomplete: the stream ended without a stop reason, or stopped for a reason
+ *   we do not handle (pause_turn, tool_use, unknown values)
+ */
+export type ChatFinish = "complete" | "truncated" | "refused" | "incomplete";
+
 export interface ChatResult {
   text: string;
+  /** Normalised stop reason. Adapters always set it. */
+  finish: ChatFinish;
+  /** The provider's raw stop reason, for error messages and logs (no content). */
+  stopReason?: string | null;
+}
+
+/** Map an Anthropic Messages API stop_reason onto ChatFinish. */
+export function anthropicFinish(stopReason: string | null | undefined): ChatFinish {
+  if (stopReason === "end_turn" || stopReason === "stop_sequence") return "complete";
+  if (stopReason === "max_tokens" || stopReason === "model_context_window_exceeded") return "truncated";
+  if (stopReason === "refusal") return "refused";
+  return "incomplete";
+}
+
+/** Map an OpenAI-compatible Chat Completions finish_reason onto ChatFinish. */
+export function chatCompletionsFinish(finishReason: string | null | undefined): ChatFinish {
+  if (finishReason === "stop") return "complete";
+  if (finishReason === "length") return "truncated";
+  if (finishReason === "content_filter") return "refused";
+  return "incomplete";
 }
 
 export interface LlmProvider {

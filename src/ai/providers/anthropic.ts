@@ -1,5 +1,6 @@
 import { ApiError } from "@/api/errors";
 import { readSse } from "./sse";
+import { anthropicFinish } from "./types";
 import type { ChatAttachment, ChatRequest, LlmProvider } from "./types";
 
 /**
@@ -35,6 +36,8 @@ function blockFor(a: ChatAttachment): AnthropicBlock | null {
  */
 const ENDPOINT = "https://api.anthropic.com/v1/messages";
 const VERSION = "2023-06-01";
+/** Output budget when the caller does not set one (thinking + answer). */
+export const DEFAULT_MAX_TOKENS = 16_000;
 
 function mapError(status: number, body: string): ApiError {
   if (status === 401)
@@ -73,7 +76,9 @@ function bodyFor(req: ChatRequest, model: string, stream: boolean): Record<strin
   if (req.json) {
     system = `${system ?? ""}\n\nRespond with only a single valid JSON object. No prose, no markdown code fences.`.trim();
   }
-  const body: Record<string, unknown> = { model, max_tokens: req.maxTokens ?? 4096, messages, stream };
+  // Current Claude models think before answering, and that thinking counts
+  // against max_tokens, so the default must leave room for both.
+  const body: Record<string, unknown> = { model, max_tokens: req.maxTokens ?? DEFAULT_MAX_TOKENS, messages, stream };
   if (system) body.system = system;
   return body;
 }
@@ -105,29 +110,53 @@ export function makeAnthropic(apiKey: string, model: string): LlmProvider {
     id: "anthropic",
     async chat(req) {
       const res = await post(req, false);
-      const data = (await res.json()) as { content?: { type?: string; text?: string }[] };
+      const data = (await res.json()) as {
+        content?: { type?: string; text?: string }[];
+        stop_reason?: string | null;
+      };
       const text = (data.content ?? [])
         .filter((c) => c.type === "text" && typeof c.text === "string")
         .map((c) => c.text as string)
         .join("");
-      return { text };
+      return { text, finish: anthropicFinish(data.stop_reason), stopReason: data.stop_reason ?? null };
     },
     async stream(req, onDelta) {
       const res = await post(req, true);
       if (!res.body) throw new ApiError("server", res.status, "Anthropic returned an empty stream.");
       let full = "";
+      // Stays null unless a message_delta carries a stop_reason. A stream that
+      // ends without one (dropped connection) is reported as incomplete.
+      let stopReason: string | null = null;
       await readSse(res.body, (data) => {
+        let j: {
+          type?: string;
+          delta?: { type?: string; text?: string; stop_reason?: string | null };
+          error?: { type?: string; message?: string };
+        };
         try {
-          const j = JSON.parse(data) as { type?: string; delta?: { type?: string; text?: string } };
-          if (j.type === "content_block_delta" && j.delta?.type === "text_delta" && j.delta.text) {
-            full += j.delta.text;
-            onDelta(j.delta.text);
-          }
+          j = JSON.parse(data);
         } catch {
-          // Non-JSON frame; ignore.
+          return; // Non-JSON frame (keepalive); ignore.
+        }
+        if (j.type === "content_block_delta" && j.delta?.type === "text_delta" && j.delta.text) {
+          full += j.delta.text;
+          onDelta(j.delta.text);
+        } else if (j.type === "message_delta" && j.delta?.stop_reason) {
+          stopReason = j.delta.stop_reason;
+        } else if (j.type === "error") {
+          // An error mid-stream (for example "overloaded") ends the answer early.
+          // It must surface as a failure, never as a shorter answer.
+          const overloaded = j.error?.type === "overloaded_error";
+          throw new ApiError(
+            overloaded ? "server" : "invalid",
+            overloaded ? 529 : 0,
+            overloaded
+              ? "Anthropic is overloaded right now, so the answer stopped part-way. Please try again."
+              : `Anthropic stopped the answer part-way: ${j.error?.message ?? "unknown error"}.`,
+          );
         }
       });
-      return { text: full };
+      return { text: full, finish: anthropicFinish(stopReason), stopReason };
     },
   };
 }

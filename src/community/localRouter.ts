@@ -20,6 +20,7 @@ import {
   riskPrompt,
 } from "@/ai/prompts";
 import { normalizeParties } from "@/lib/parties";
+import { groundingFor } from "@/lib/grounding";
 import { listDefinedTerms } from "@/lib/defined-terms";
 import { shapeDraftHere } from "@/features/drafthere/shape";
 import { DRAFT_HERE_PATH } from "@/api/draft-here";
@@ -268,7 +269,9 @@ function groundEdits(documentText: string, raw: Record<string, unknown>): Commun
       proposedLanguage: str(e.proposedLanguage),
       rationale: str(e.rationale),
       fallbackPosition: typeof e.fallbackPosition === "string" ? e.fallbackPosition : null,
-      grounding: isInsertion ? "insertion" : "verified",
+      // "verified" only when the wording occurs exactly once (audit F07); the
+      // apply path still refuses an ambiguous or missing match.
+      grounding: isInsertion ? ("insertion" as const) : groundingFor(currentLanguage, documentText).grounding,
       nature:
         e.nature === "housekeeping" ? "housekeeping" : e.nature === "substantive" ? "substantive" : undefined,
     }));

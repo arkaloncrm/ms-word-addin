@@ -21,22 +21,24 @@ import { readDocumentText } from "@/office/document";
 import { classifyContract } from "@/api/contract-review";
 import { normalizeParties, partySide, type ContractParty } from "@/lib/parties";
 import type { RunParams } from "./useReview";
+import type { ReviewDepth } from "@/api/types";
 
-type MarkupLevel = "light" | "standard" | "firm";
+type MarkupLevel = ReviewDepth;
 type PaperSide = "" | "counterparty" | "own";
 
-/** Scale of markup, ordered light to firm for the segmented control. */
+/** Review modes, narrowest to widest. Balanced is the default. No mode ever
+ *  drops a material risk; they differ in how much else is raised. */
 const MARKUP_OPTIONS: { value: MarkupLevel; label: string }[] = [
-  { value: "light", label: "Light" },
-  { value: "standard", label: "Standard" },
-  { value: "firm", label: "Firm" },
+  { value: "critical", label: "Critical" },
+  { value: "balanced", label: "Balanced" },
+  { value: "comprehensive", label: "Comprehensive" },
 ];
 
-/** Live named-level caption shown under the markup segmented control. */
+/** Live caption shown under the mode segmented control. */
 const MARKUP_CAPTION: Record<MarkupLevel, string> = {
-  light: "Light: only flag escalation triggers.",
-  standard: "Standard: mark gaps to your preferred position.",
-  firm: "Firm: hard-line every deviation.",
+  critical: "Critical: material legal and commercial risks only.",
+  balanced: "Balanced: every material risk, plus changes worth negotiating. No cosmetic edits.",
+  comprehensive: "Comprehensive: everything, including minor drafting tidy-ups.",
 };
 
 const PAPER_OPTIONS: { value: PaperSide; label: string }[] = [
@@ -78,7 +80,7 @@ export function ReviewForm({
   const [instructions, setInstructions] = useState("");
   const focus = useImprovePrompt(improveLegalToolPrompt, instructions, setInstructions);
   const [includeExtras, setIncludeExtras] = useState(false);
-  const [markupLevel, setMarkupLevel] = useState<MarkupLevel>("standard");
+  const [markupLevel, setMarkupLevel] = useState<MarkupLevel>("balanced");
   const [paperSide, setPaperSide] = useState<PaperSide>("");
 
   // Zero-config entry: everything is inferred or defaulted, and the details live
@@ -128,7 +130,7 @@ export function ReviewForm({
     };
   }, [initial?.contractType]);
 
-  const markupLabel = MARKUP_OPTIONS.find((o) => o.value === markupLevel)?.label ?? "Standard";
+  const markupLabel = MARKUP_OPTIONS.find((o) => o.value === markupLevel)?.label ?? "Balanced";
   const sideLabel = chosenParty ? chosenParty.name : labelOf(USER_SIDES, userSide);
 
   return (
@@ -181,7 +183,7 @@ export function ReviewForm({
             <span className="muted">
               {needsParty ? " · which party are you acting for?" : ` · representing ${sideLabel}`}
               {" · "}
-              {markupLabel.toLowerCase()} markup
+              {markupLabel} mode
             </span>
             {detected === contractType && (
               <span className="muted" style={{ marginLeft: 6, fontStyle: "italic" }}>
@@ -281,9 +283,9 @@ export function ReviewForm({
           </div>
 
           <div className="field field--inline">
-            <label>Markup level</label>
+            <label>Review mode</label>
             <SegmentedControl
-              label="Markup level"
+              label="Review mode"
               options={MARKUP_OPTIONS}
               value={markupLevel}
               onChange={setMarkupLevel}

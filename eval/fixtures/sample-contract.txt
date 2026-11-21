@@ -1,0 +1,48 @@
+SAMPLE - FICTIONAL - FOR SOFTWARE TESTING ONLY. This is not a real agreement and the parties do not exist.
+Software Services Agreement
+Between Brindlewick Analytics Pty Ltd (ABN 00 000 000 000) of Sydney, New South Wales (Supplier)
+and Tallowmere Retail Group Pty Ltd (ABN 00 000 000 000) of Sydney, New South Wales (Customer).
+Commencement Date: 1 February 2027
+1. Definitions
+1.1 "Customer Data" means all data, files and information that the Customer or its users upload to or generate through the platform.
+1.2 "Fees" means the fees set out in Schedule 1.
+1.3 "Service Offering" means the Supplier's cloud-based sales analytics platform and related support.
+1.4 "Term" means the Initial Term and any Renewal Term.
+2. Supply of services
+2.1 The Supplier will provide the Services to the Customer during the Term.
+2.2 The Supplier may change, suspend or withdraw any feature of the platform at any time without notice.
+3. Term and renewal
+3.1 This Agreement starts on the Commencement Date and continues for 12 months (Initial Term).
+3.2 At the end of the Initial Term and each Renewal Term, this Agreement automatically renews for a further period of 36 months (Renewal Term) unless the Customer gives the Supplier written notice of non-renewal at least 180 days before the end of the then-current term.
+4. Fees and payment
+4.1 The Customer must pay each invoice within 7 days of the invoice date.
+4.2 Interest accrues on any overdue amount at the rate of 5% per month, compounding monthly.
+4.3 The Supplier may increase the Fees at any time on 7 days' written notice.
+5. Changes to this Agreement
+5.1 The Supplier may vary any term of this Agreement at any time by publishing the varied terms on its website. The Customer's continued use of the platform after publication constitutes acceptance of the varied terms.
+6. Intellectual property and data
+6.1 The Supplier owns all intellectual property rights in the platform.
+6.2 The Customer assigns to the Supplier all right, title and interest in the Customer Data and in any data, reports or insights derived from it. The Supplier may use the Customer Data for any purpose, including providing it to third parties.
+7. Confidentiality
+7.1 The Customer must keep confidential all information disclosed to it by the Supplier and must not disclose it to any person without the Supplier's prior written consent.
+7.2 This clause survives termination of this Agreement indefinitely.
+8. Liability
+8.1 To the maximum extent permitted by law, the Supplier's total liability to the Customer under or in connection with this Agreement is limited to the Fees paid by the Customer in the one month immediately before the claim arose.
+8.2 The Supplier is not liable for any loss or corruption of Customer Data, however caused.
+8.3 The Customer's liability to the Supplier under or in connection with this Agreement is unlimited.
+9. Indemnity
+9.1 The Customer indemnifies the Supplier against all losses, claims, costs and expenses arising out of or in connection with this Agreement, including any loss caused or contributed to by the negligence of the Supplier.
+10. Termination
+10.1 The Supplier may terminate this Agreement at any time, without cause, by giving the Customer 7 days' written notice.
+10.2 The Customer may terminate this Agreement only if the Supplier commits a material breach and fails to remedy that breach within 180 days after receiving written notice of it.
+10.3 On termination for any reason, all Fees that would have been payable for the remainder of the Term become immediately due and payable by the Customer.
+11. Governing law
+11.1 This Agreement is governed by the laws of the State of Delaware, United States of America. Each party submits to the exclusive jurisdiction of the courts of the State of Delaware.
+12. General
+12.1 Any dispute must first be dealt with under clause 14 (Dispute Resolution).
+12.2 This Agreement is the entire agreement between the parties about its subject matter.
+Schedule 1 - Fees
+Platform subscription: $4,000 per month (excluding GST), invoiced monthly in advance.
+Signing page
+Signed for Brindlewick Analytics Pty Ltd by its authorised representative: ______________________   Date: __________
+Signed for Tallowmere Retail Group Pty Ltd by its authorised representative: ______________________   Date: __________

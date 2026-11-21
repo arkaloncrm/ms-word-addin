@@ -25,11 +25,22 @@ export function CourtListenerCard() {
       </p>
       <div className="stack" style={{ gap: 10 }}>
         <Field label="CourtListener token">
+          {/* Masked text field, not type="password", so Word's browser engine
+              does not offer to save the token as a password (see
+              ProviderKeyForm). */}
           <input
-            type="password"
+            type="text"
+            className="secret-input"
+            name="arklaw-courtlistener-token"
             value={token}
             placeholder="Paste your token"
             autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            data-1p-ignore
+            data-lpignore="true"
+            data-form-type="other"
             onChange={(e) => {
               setToken(e.target.value);
               setSaved(false);

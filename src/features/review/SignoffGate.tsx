@@ -18,7 +18,30 @@ const LEVEL_LABEL: Record<string, string> = {
  * so the primary action sits with its context, matching the "Re-run review"
  * button in the stale-document banner.
  */
-export function SignoffGate({ gate, action }: { gate: ReviewApprovalGate; action?: ReactNode }) {
+export function SignoffGate({
+  gate,
+  action,
+  incomplete = false,
+}: {
+  gate: ReviewApprovalGate;
+  action?: ReactNode;
+  /** Part of the document was not reviewed: never say "Clear to send". */
+  incomplete?: boolean;
+}) {
+  if (incomplete && !gate.required) {
+    return (
+      <Banner tone="warn">
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <strong>Not cleared: review incomplete</strong>
+          <Badge tone="yellow">Part not reviewed</Badge>
+        </div>
+        <p className="small" style={{ margin: "4px 0 0" }}>
+          Part of this document was not reviewed, so ArkLaw cannot say it is clear to send. Review the
+          rest before relying on this result.
+        </p>
+      </Banner>
+    );
+  }
   if (!gate.required) {
     return (
       <Banner tone="info">

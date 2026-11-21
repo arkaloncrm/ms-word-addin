@@ -8,6 +8,7 @@
  * services; they are intentionally kept short and deterministic.
  */
 import { lawName } from "@/lib/region";
+import type { ReviewDepth } from "@/api/types";
 
 export interface Prompt2 {
   system: string;
@@ -37,11 +38,34 @@ const JSON_ONLY = "Respond with ONLY a single valid JSON object matching the sch
 export const LEGISLATION_CITING =
   ' When you cite legislation, name the Act in full with its year and jurisdiction, and the section, for example "section 6 of the Privacy Act 1988 (Cth)", so the lawyer can check it against the official register.';
 
+/** How much of the open document Ask can read. Beyond this, Ask reads only the
+ *  start, tells the model so, and the add-in shows the lawyer a visible note
+ *  (see askDocumentNote and localStream). */
+export const ASK_CONTEXT_MAX_CHARS = 400_000;
+
+/**
+ * The visible note shown above an Ask answer when the document was too long to
+ * read in full, or "" when it was read in full. Never silent.
+ */
+export function askDocumentNote(context: string): string {
+  if (!context || context.length <= ASK_CONTEXT_MAX_CHARS) return "";
+  const pct = Math.floor((ASK_CONTEXT_MAX_CHARS / context.length) * 100);
+  return (
+    `**Note: this document is too long for Ask to read in full.** This answer is based on the first ` +
+    `${pct}% of it only (${ASK_CONTEXT_MAX_CHARS.toLocaleString("en-AU")} of ${context.length.toLocaleString("en-AU")} characters). ` +
+    `Anything after that was not read. To ask about a later part, select it in Word first.\n\n`
+  );
+}
+
 /** Grounded assistant chat over the open document (streamed). `officialText` is
  *  section text fetched from the Federal Register of Legislation, if any. */
 export function assistantSystem(context: string, officialText = ""): string {
+  const cut = !!context && context.length > ASK_CONTEXT_MAX_CHARS;
   const doc = context && context.trim()
-    ? `\n\nThe user has a document open in Word. Ground your answer in it and quote it where relevant:\n"""\n${context.slice(0, 400_000)}\n"""`
+    ? `\n\nThe user has a document open in Word. Ground your answer in it and quote it where relevant:\n"""\n${context.slice(0, ASK_CONTEXT_MAX_CHARS)}\n"""` +
+      (cut
+        ? `\n\nThis document was too long to include in full: you have only its first ${ASK_CONTEXT_MAX_CHARS.toLocaleString("en-AU")} characters. If the answer could depend on a later part, say so plainly.`
+        : "")
     : "\n\nThe user has no document text attached; answer from general knowledge and say when you are unsure.";
   // Quoting the document's exact words in double quotation marks lets the add-in
   // turn each quote into a link that jumps to that wording in Word.
@@ -243,27 +267,74 @@ export const REVIEW_INSTRUCTION_RULES =
   `"Instruction not carried out" and whose observation says which instruction and why. ` +
   `Set fromInstruction to null on redlines you raise yourself. `;
 
+/**
+ * Review modes (research finding: AI review tools raise more redlines than a
+ * lawyer would, which costs review time and creates needless negotiation).
+ * The modes change WHICH findings are worth raising, never whether a material
+ * risk is reported: there is no numeric cap in any mode.
+ */
+export type { ReviewDepth };
+
+/** Map any stored or older value (light / standard / firm) onto a mode.
+ *  Unknown or missing values get the default, Balanced. */
+export function normalizeReviewDepth(v: unknown): ReviewDepth {
+  if (v === "critical" || v === "light") return "critical";
+  if (v === "comprehensive" || v === "firm") return "comprehensive";
+  return "balanced";
+}
+
+/** The most contract text one review pass may carry. Longer documents are split
+ *  into sections upstream (useReview); this is a guard, never a silent cut. */
+export const REVIEW_MAX_CHARS = 200_000;
+
+const DEPTH_RULES: Record<ReviewDepth, string> = {
+  critical:
+    "REVIEW MODE: CRITICAL. Report every issue that creates a material legal or commercial risk for your side. " +
+    "Do not raise nice-to-have improvements or drafting polish. ",
+  balanced:
+    "REVIEW MODE: BALANCED. Report every material risk, plus the amendments a careful commercial lawyer would actually ask for because they are worth negotiating. " +
+    "Leave out purely cosmetic drafting changes. ",
+  comprehensive:
+    "REVIEW MODE: COMPREHENSIVE. Report every material risk, every worthwhile amendment, and lower-priority drafting improvements (clarity, consistency, style, formatting). ",
+};
+
+/** Applies in every mode. Exported for tests. */
+export const REVIEW_MATERIALITY_RULES =
+  "Never leave out a material issue to keep the review short: there is no limit on the number of findings. " +
+  "Drafting faults that create legal uncertainty are MATERIAL, not cosmetic: a term used in an operative clause but never defined (or defined differently), " +
+  "a cross-reference to a clause that does not exist or points to the wrong clause, and provisions that contradict each other. " +
+  "Cosmetic means wording polish, style, punctuation, formatting or numbering that does not change the meaning. " +
+  'Rate each redline: severity "high" (a deal-breaker or major exposure), "medium" (a material issue worth negotiating) or "low" (minor or cosmetic). ' +
+  'Set nature to "housekeeping" only for cosmetic changes. ' +
+  "List the redlines in order of importance, most important first. " +
+  "Every reviewer instruction is carried out in every mode, whatever its severity. ";
+
 export function contractReviewPrompt(
   documentText: string,
   contractType: string,
   userSide: string,
+  /** Review mode; older light/standard/firm values are accepted and mapped. */
   markupLevel: string,
   paperSide: string | undefined,
   instructions: string | undefined,
   /** The lawyer's default jurisdiction code from Settings ("" = Australia). */
   governingLaw?: string,
 ): Prompt2 {
+  // Never cut the contract silently: an over-long pass is a programming error
+  // upstream (useReview splits long documents into sections first).
+  if (documentText.length > REVIEW_MAX_CHARS) {
+    throw new Error(
+      `This text is ${documentText.length.toLocaleString("en-AU")} characters, more than one review pass can read (${REVIEW_MAX_CHARS.toLocaleString("en-AU")}). Nothing was reviewed. Review it in sections instead.`,
+    );
+  }
   const law = `Unless the contract's governing law clause says otherwise, assess it under the law of ${lawName(governingLaw)}. `;
-  const markup =
-    markupLevel === "light"
-      ? "Flag only escalation-worthy issues."
-      : markupLevel === "firm"
-        ? "Hard-line every deviation from the preferred position."
-        : "Mark gaps to the preferred position.";
+  const depth = DEPTH_RULES[normalizeReviewDepth(markupLevel)];
   const paper = paperSide === "own" ? "This is our own template; defend it." : paperSide === "counterparty" ? "This is the counterparty's paper; mark it up assertively." : "";
   return {
     system:
-      `${GROUNDING} Review this ${contractType || "contract"} from the ${userSide || "reviewing"} side. ${law}${markup} ${paper} ` +
+      `${GROUNDING} Review this ${contractType || "contract"} from the ${userSide || "reviewing"} side. ${law}${paper} ` +
+      depth +
+      REVIEW_MATERIALITY_RULES +
       (instructions && instructions.trim() ? REVIEW_INSTRUCTION_RULES : "") +
       `For each issue produce a redline. currentLanguage MUST be copied VERBATIM from the contract (an exact substring) so it can be located; ` +
       `if you are proposing to ADD a missing clause, set currentLanguage to "" and grounding to "insertion". ` +
@@ -274,11 +345,13 @@ export function contractReviewPrompt(
       `Schema: {"summary": string, "overallRisk": "green"|"yellow"|"red", ` +
       `"redlines": [{"clauseName": string, "sectionReference": string|null, "currentLanguage": string, "proposedLanguage": string, ` +
       `"rationale": string, "fallbackPosition": string|null, "grounding": "verified"|"unverified"|"insertion", ` +
-      `"isDealBreaker": boolean, "nature": "substantive"|"housekeeping", "fromInstruction": string|null}], ` +
+      `"severity": "high"|"medium"|"low", "isDealBreaker": boolean, "nature": "substantive"|"housekeeping", "fromInstruction": string|null}], ` +
       `"missingClauses": string[], ` +
       `"negotiationPriorities": [{"tier": number, "tierLabel": string, "items": string[]}], ` +
-      `"flags": [{"clauseName": string, "sectionReference": string, "observation": string, "quote": string}]}.`,
-    user: (instructions ? `Reviewer instructions: ${instructions}\n\n` : "") + `Contract:\n${documentText.slice(0, 200_000)}`,
+      `"flags": [{"clauseName": string, "sectionReference": string, "observation": string, "quote": string}], ` +
+      `"reviewComplete": true}. ` +
+      `"reviewComplete" must be the LAST field of the object and always true: it shows the review was written out in full.`,
+    user: (instructions ? `Reviewer instructions: ${instructions}\n\n` : "") + `Contract:\n${documentText}`,
   };
 }
 

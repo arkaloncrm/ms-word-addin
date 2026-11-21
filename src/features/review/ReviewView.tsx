@@ -26,6 +26,7 @@ import { ComplianceView } from "@/features/compliance/ComplianceView";
 import { ArrowLeftIcon, PlusIcon } from "@/ui/icons";
 import { useReviewContext } from "./ReviewProvider";
 import type { RunParams } from "./useReview";
+import { DEPTH_LABEL, reviewScopeText } from "./scope";
 import { useReviewFreshness } from "./useReviewFreshness";
 import { useDecisions, redlineKey } from "./decisions";
 import { CONTRACT_TYPES, JURISDICTIONS, USER_SIDES, labelOf } from "./constants";
@@ -62,8 +63,8 @@ function StreamingState({ label }: { label: string }) {
         <span />
       </div>
       <p className="small muted" style={{ margin: 0 }}>
-        Reviewing the contract clause by clause. This usually takes 30-60 seconds. You can switch
-        tabs while it runs.
+        Reviewing the contract clause by clause. This usually takes 2 to 4 minutes (longer for a long
+        contract, which is reviewed in parts). You can switch tabs while it runs.
       </p>
     </div>
   );
@@ -380,19 +381,33 @@ export function ReviewView({
         </div>
 
         <div className="review__body">
+          {/* What this review covered, always stated, never assumed. */}
+          {reviewScopeText(state.scope, result.reviewDepth) && (
+            <p className="small muted review__scope" style={{ margin: 0 }}>
+              {reviewScopeText(state.scope, result.reviewDepth)}
+            </p>
+          )}
           {/* Warnings apply to the whole review, so they stay above the tab body. */}
-          {state.partial && params && (
+          {state.partial && (
             <Banner tone="warn">
               <p className="small" style={{ margin: 0 }}>
-                Reviewed {state.partial.done} of {state.partial.total} sections. The rest could not be
-                completed (usually a quota or network limit). The findings below cover the completed
-                sections only.
+                <strong>
+                  Partial review: only {state.partial.done} of {state.partial.total} sections were reviewed.
+                </strong>{" "}
+                The findings below cover those sections only. These sections were NOT reviewed:
               </p>
-              <div className="row" style={{ gap: 8, marginTop: 8 }}>
-                <Button variant="primary" size="sm" onClick={() => onRun(params)}>
-                  Try the full review again
-                </Button>
-              </div>
+              <ul className="small" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                {state.partial.missing.map((label, i) => (
+                  <li key={i}>Section starting “{label || "(blank)"}”</li>
+                ))}
+              </ul>
+              {params && (
+                <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                  <Button variant="primary" size="sm" onClick={() => onRun(params)}>
+                    Try the full review again
+                  </Button>
+                </div>
+              )}
             </Banner>
           )}
           {docChanged && params && (
@@ -415,6 +430,7 @@ export function ReviewView({
               {gate && (
                 <SignoffGate
                   gate={gate}
+                  incomplete={!!state.partial}
                   action={
                     <RecordGovernance
                       gate={gate}
@@ -475,9 +491,18 @@ export function ReviewView({
                   ) : undefined
                 }
               />
+              {(result.hiddenMinorCount ?? 0) > 0 && (
+                <p className="small muted" style={{ margin: 0 }}>
+                  {result.hiddenMinorCount} minor drafting tidy-up{result.hiddenMinorCount === 1 ? "" : "s"} left
+                  out in {DEPTH_LABEL[result.reviewDepth ?? "balanced"]} mode. Run a Comprehensive review to see{" "}
+                  {result.hiddenMinorCount === 1 ? "it" : "them"}.
+                </p>
+              )}
               {redlines.length === 0 ? (
                 <Banner tone="info">
-                  No redlines suggested. This contract looks clean from your side.
+                  {state.partial
+                    ? "No changes suggested in the sections that were reviewed. Part of the document was not reviewed (see above)."
+                    : `No changes suggested${result.reviewDepth ? ` in ${DEPTH_LABEL[result.reviewDepth]} mode` : ""}. ArkLaw finished the review but can miss issues, so check the contract yourself before relying on this.`}
                 </Banner>
               ) : (
                 <div className="stack">

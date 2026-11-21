@@ -57,6 +57,18 @@ function safeParse<T>(data: string): T | null {
 }
 
 /**
+ * The error for a stream "error" event. When the event carries a message it is
+ * shown to the lawyer WORD FOR WORD (kind "unknown" makes errorMessage return
+ * it as is): the review's own message says what failed and that nothing was
+ * marked as reviewed or clean. Without a message, it stays a generic server
+ * error. Exported for tests.
+ */
+export function streamError(data: string, fallback: string): ApiError {
+  const message = safeParse<{ message?: string }>(data)?.message?.trim();
+  return message ? new ApiError("unknown", 0, message) : new ApiError("server", 0, fallback);
+}
+
+/**
  * Stream a contract review. Resolves when the `done` event arrives.
  * Throws ApiError on quota (402), size (413), or transport failures.
  */
@@ -102,8 +114,7 @@ export async function streamContractReview(
           break;
         }
         case "error": {
-          const e = safeParse<{ message?: string }>(data);
-          throw new ApiError("server", 0, e?.message ?? "The review failed.");
+          throw streamError(data, "The review failed.");
         }
         default:
           break; // done, heartbeats
@@ -218,8 +229,7 @@ export async function streamClauseFix(
           break;
         }
         case "error": {
-          const e = safeParse<{ message?: string }>(data);
-          throw new ApiError("server", 0, e?.message ?? "The fix could not be drafted.");
+          throw streamError(data, "The fix could not be drafted.");
         }
         default:
           break; // done, heartbeats

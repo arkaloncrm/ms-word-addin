@@ -35,27 +35,45 @@ export const KEYLESS_PROVIDERS: ProviderId[] = ["ollama"];
 
 const KNOWN_PROVIDERS: ProviderId[] = ["openai", "anthropic", "gemini", "groq", "ollama", "azure"];
 
-/** A small curated list per provider. New models are a one-line add here. Azure
- *  lists nothing because the "model" is the user's own deployment name. */
+/**
+ * A small curated list per provider. New models are a one-line add here. Azure
+ * lists nothing because the "model" is the user's own deployment name.
+ *
+ * Checked against each provider's official model and deprecation pages on
+ * 20 Nov 2026. Only IDs that are current AND documented for the API this
+ * add-in uses are listed; anything else can still be typed in under "Other".
+ * Removed then: gpt-4o-mini (deprecated, shutdown 14 Jan 2027); gemini-2.5-flash
+ * and gemini-2.5-pro (deprecated 2 Nov 2026, shut down 1 Dec 2026, after which
+ * calls are silently rerouted to other models);
+ * llama-3.3-70b-versatile and llama-3.1-8b-instant (shut down 16 Aug 2026 for
+ * non-enterprise keys); qwen-2.5-32b (shut down 14 Apr 2025).
+ * Sources: developers.openai.com/api/docs/models and /deprecations,
+ * aistudio.google.com/docs/models, /deprecations and /openai,
+ * console.groq.com/docs/models and /deprecations.
+ */
 export const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
   openai: [
     { id: "gpt-5.4-mini", label: "GPT-5.4 mini (fast, low cost)" },
     { id: "gpt-5.5", label: "GPT-5.5 (highest quality)" },
-    { id: "gpt-4o-mini", label: "GPT-4o mini" },
   ],
+  // Current Claude models (IDs from Anthropic's model list, Nov 2026). The
+  // default (below) was chosen by a measured comparison on the fictional sample
+  // contract; see the PR that introduced this list.
   anthropic: [
-    { id: "claude-sonnet-5", label: "Claude Sonnet 5 (recommended)" },
-    { id: "claude-opus-4-8", label: "Claude Opus 4.8 (highest quality)" },
-    { id: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5 (fast)" },
+    { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5" },
+    { id: "claude-opus-5-5", label: "Claude Opus 5.5 (highest quality)" },
+    { id: "claude-haiku-5-5", label: "Claude Haiku 5.5 (fastest, lowest cost)" },
+    { id: "claude-sonnet-5", label: "Claude Sonnet 5 (previous generation)" },
   ],
+  // The two Gemini models Google's docs show on the OpenAI-compatible endpoint
+  // this add-in calls.
   gemini: [
-    { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash (fast)" },
-    { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro (highest quality)" },
+    { id: "gemini-4-hydrogen", label: "Gemini 4 Hydrogen (recommended)" },
+    { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash (fast)" },
   ],
   groq: [
-    { id: "llama-3.3-70b-versatile", label: "Llama 3.3 70B" },
-    { id: "llama-3.1-8b-instant", label: "Llama 3.1 8B (fast)" },
-    { id: "qwen-2.5-32b", label: "Qwen 2.5 32B" },
+    { id: "openai/gpt-oss-120b", label: "GPT-OSS 120B" },
+    { id: "openai/gpt-oss-20b", label: "GPT-OSS 20B (fast)" },
   ],
   ollama: [
     { id: "llama3.1", label: "Llama 3.1" },
@@ -68,8 +86,8 @@ export const MODEL_OPTIONS: Record<ProviderId, ModelOption[]> = {
 const DEFAULT_MODEL: Record<ProviderId, string> = {
   openai: "gpt-5.4-mini",
   anthropic: "claude-sonnet-5",
-  gemini: "gemini-2.5-flash",
-  groq: "llama-3.3-70b-versatile",
+  gemini: "gemini-4-hydrogen",
+  groq: "openai/gpt-oss-120b",
   ollama: "llama3.1",
   // Azure's model is the deployment name, which is per-account; no default.
   azure: "",

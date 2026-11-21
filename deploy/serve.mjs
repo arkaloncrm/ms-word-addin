@@ -39,7 +39,10 @@ const CSP = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self' data:",
-  "connect-src 'self' https://api.openai.com https://api.anthropic.com https://api.groq.com https://generativelanguage.googleapis.com https://appsforoffice.microsoft.com https://*.officeapps.live.com https://*.office.com https://*.microsoftonline.com",
+  // AI providers the Settings screen offers (Azure OpenAI is the user's own
+  // resource endpoint; Ollama is a local server), the Federal Register of
+  // Legislation API (Law cited: Act names and section numbers only), and Office.
+  "connect-src 'self' https://api.openai.com https://api.anthropic.com https://api.groq.com https://generativelanguage.googleapis.com https://*.openai.azure.com https://*.cognitiveservices.azure.com https://*.services.ai.azure.com http://localhost:11434 http://127.0.0.1:11434 https://api.prod.legislation.gov.au https://appsforoffice.microsoft.com https://*.officeapps.live.com https://*.office.com https://*.microsoftonline.com",
   "frame-src 'self' https://appsforoffice.microsoft.com https://*.oaspapps.com https://login.microsoftonline.com https://login.live.com",
   "frame-ancestors 'self' https://*.officeapps.live.com https://*.office.com https://*.office365.com https://*.microsoft365.com https://*.cloud.microsoft https://*.microsoftpersonalcontent.com https://*.live.com https://*.sharepoint.com",
   "base-uri 'self'",

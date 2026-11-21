@@ -1,12 +1,29 @@
 import { errorMessage } from "@/api/errors";
 import type { StreamHandlers } from "@/api/sse";
 import { getProvider } from "@/ai/providers/registry";
-import type { ChatAttachment, ChatMessage } from "@/ai/providers/types";
-import { assistantSystem } from "@/ai/prompts";
+import type { ChatAttachment, ChatFinish, ChatMessage } from "@/ai/providers/types";
+import { askDocumentNote, assistantSystem } from "@/ai/prompts";
 import { officialTextFor } from "@/legal/officialText";
 import { register } from "@/legal/register";
 import { communityDraftFixStream, communityReviewStream } from "./reviewStream";
 import { communityEditDocument } from "./localRouter";
+
+/** Output budget for an Ask answer (thinking + answer on current Claude models). */
+export const ASK_MAX_TOKENS = 16_000;
+
+/** The visible note appended when an Ask answer did not finish, or "". */
+export function askEndNote(finish: ChatFinish): string {
+  switch (finish) {
+    case "complete":
+      return "";
+    case "truncated":
+      return "\n\n**Note: this answer was cut off because it reached the length limit.** Ask a narrower question, or ask ArkLaw to continue.";
+    case "refused":
+      return "\n\n**Note: the AI declined to answer this.** Try rephrasing the question.";
+    default:
+      return "\n\n**Note: this answer stopped before it finished**, so it may be incomplete. Please ask again.";
+  }
+}
 
 /**
  * Community replacement for the streaming endpoints. Dispatches by path and emits
@@ -35,11 +52,19 @@ async function chatStream(body: unknown, opts: StreamHandlers): Promise<void> {
   if (opts.signal?.aborted) return;
   const system = assistantSystem(b.context ?? "", official);
 
+  const chunk = (content: string) => opts.onEvent({ event: "chunk", data: JSON.stringify({ content }) });
   try {
     const provider = getProvider();
-    await provider.stream({ system, messages, attachments, signal: opts.signal }, (delta) => {
-      opts.onEvent({ event: "chunk", data: JSON.stringify({ content: delta }) });
-    });
+    // Never silent: if the document was too long to read in full, say so first.
+    const docNote = askDocumentNote(b.context ?? "");
+    if (docNote) chunk(docNote);
+    const res = await provider.stream(
+      { system, messages, attachments, signal: opts.signal, maxTokens: ASK_MAX_TOKENS },
+      chunk,
+    );
+    // A cut-off, refused or unfinished answer must not read as a complete one.
+    const endNote = askEndNote(res.finish);
+    if (endNote) chunk(endNote);
   } catch (e) {
     if ((e as Error).name === "AbortError") return;
     opts.onEvent({ event: "error", data: JSON.stringify({ message: errorMessage(e) }) });

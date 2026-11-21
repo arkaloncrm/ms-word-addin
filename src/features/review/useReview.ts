@@ -6,7 +6,7 @@ import {
   MAX_DOCUMENT_CHARS,
   type ReviewProgress,
 } from "@/api/contract-review";
-import type { ContractReviewResponse } from "@/api/types";
+import type { ContractReviewRequest, ContractReviewResponse } from "@/api/types";
 import {
   readDocumentFingerprint,
   readSelectionText,
@@ -14,6 +14,7 @@ import {
 } from "@/office/document";
 import { errorMessage } from "@/api/errors";
 import { splitIntoSections, mergeReviews } from "@/lib/sections";
+import { regradeGrounding } from "@/lib/grounding";
 import { resolveClientRulesContext } from "@/lib/activeClient";
 import type { ReviewScope } from "./constants";
 
@@ -36,8 +37,9 @@ export interface RunParams {
   includeExtras?: boolean;
   /** Scope this review to a Vaquill AI matter (carried through to saving). */
   matterId?: string;
-  /** Markup aggressiveness (light / standard / firm). */
-  markupLevel?: "light" | "standard" | "firm";
+  /** Review mode (critical / balanced / comprehensive; older light / standard /
+   *  firm values are still accepted and mapped). */
+  markupLevel?: ContractReviewRequest["markupLevel"];
   /** Whose paper this is (own / counterparty), or undefined if unknown. */
   paperSide?: "own" | "counterparty";
 }
@@ -50,8 +52,73 @@ export interface ReviewState {
   /** SHA-256 of the reviewed document body, the freshness baseline. */
   docHash: string | null;
   /** Set when a sectioned review finished only some sections (the rest failed),
-   * so the completed, billed work is not thrown away. */
-  partial: { done: number; total: number } | null;
+   * so the completed, billed work is not thrown away. `missing` names each
+   * section that was NOT reviewed (its opening words), so the lawyer knows
+   * exactly what is uncovered. */
+  partial: { done: number; total: number; missing: string[] } | null;
+  /** What the finished review covered, shown above the results. Null for a
+   *  resumed review whose scope is unknown. */
+  scope: ReviewCoverage | null;
+}
+
+/** What one finished review covered. */
+export interface ReviewCoverage {
+  kind: "document" | "selection";
+  /** Number of review passes the text was split into (1 = read in one go). */
+  parts: number;
+  /** Characters of text reviewed. */
+  chars: number;
+  /** Words reviewed (whitespace-separated), shown to the lawyer. */
+  words: number;
+}
+
+/** Word count of the reviewed text, comparable to Word's status-bar count. */
+export function countWords(text: string): number {
+  const t = text.trim();
+  return t ? t.split(/\s+/).length : 0;
+}
+
+/** Message for a review stream that ended without delivering a review. */
+export const NO_RESULT_MESSAGE =
+  "Review not completed. The review ended without a result. Nothing has been marked as reviewed or clean. Please try again.";
+
+/** Short label for a section of the contract: its first non-empty line,
+ *  trimmed, so a partial-review warning can say which text was not reviewed.
+ *  Exported for tests. */
+export function sectionLabel(text: string, max = 70): string {
+  const line = text.split(/\r?\n/).map((l) => l.trim()).find((l) => l.length > 0) ?? "";
+  return line.length > max ? `${line.slice(0, max - 1).trimEnd()}…` : line;
+}
+
+/**
+ * Review the sections of a long document one after another. Stops at the first
+ * section that fails, keeping the sections already finished (billed work) so
+ * the caller can show a PARTIAL review that names what was not reviewed.
+ *
+ * Fail-safe: `runSection` returns null when a section's stream ended without
+ * delivering a review. That counts as a FAILED section, never an empty (clean)
+ * one. Exported for tests.
+ */
+export async function runSections(
+  sections: string[],
+  runSection: (text: string, index: number) => Promise<ContractReviewResponse | null>,
+  isAborted: () => boolean,
+): Promise<{ parts: ContractReviewResponse[]; sectionError: Error | null; aborted: boolean }> {
+  const parts: ContractReviewResponse[] = [];
+  for (let i = 0; i < sections.length; i++) {
+    if (isAborted()) return { parts, sectionError: null, aborted: true };
+    let result: ContractReviewResponse | null;
+    try {
+      result = await runSection(sections[i], i);
+    } catch (e) {
+      if ((e as Error).name === "AbortError" || isAborted()) return { parts, sectionError: null, aborted: true };
+      return { parts, sectionError: e as Error, aborted: false };
+    }
+    if (isAborted()) return { parts, sectionError: null, aborted: true };
+    if (!result) return { parts, sectionError: new Error(NO_RESULT_MESSAGE), aborted: false };
+    parts.push(result);
+  }
+  return { parts, sectionError: null, aborted: false };
 }
 
 const INITIAL: ReviewState = {
@@ -61,6 +128,7 @@ const INITIAL: ReviewState = {
   error: null,
   docHash: null,
   partial: null,
+  scope: null,
 };
 
 /** State machine for one streamed contract review. */
@@ -85,6 +153,7 @@ export function useReview() {
       error: null,
       docHash: docHash ?? null,
       partial: null,
+      scope: null,
     });
   }, []);
 
@@ -93,7 +162,7 @@ export function useReview() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    setState({ status: "reading", progress: null, result: null, error: null, docHash: null, partial: null });
+    setState({ status: "reading", progress: null, result: null, error: null, docHash: null, partial: null, scope: null });
     // Track the terminal payload so a dropped trailing "done" frame (proxies can
     // buffer and drop it) does not overwrite a finished, billed review with a
     // truncation error. Declared outside try so the catch can see it.
@@ -116,6 +185,7 @@ export function useReview() {
           result: null,
           docHash: null,
           partial: null,
+          scope: null,
           error:
             params.scope === "selection"
               ? "Select the clause or section you want reviewed first."
@@ -155,6 +225,12 @@ export function useReview() {
 
       // ---- Small enough for a single pass ----
       if (documentText.length <= MAX_DOCUMENT_CHARS) {
+        const scope: ReviewCoverage = {
+          kind: params.scope === "selection" ? "selection" : "document",
+          parts: 1,
+          chars: documentText.length,
+          words: countWords(documentText),
+        };
         await streamContractReview(
           { documentText, ...base },
           {
@@ -165,10 +241,13 @@ export function useReview() {
             onProgress: (progress) => setState((s) => ({ ...s, progress })),
             onResult: (result) => {
               delivered = result;
-              setState((s) => ({ ...s, status: "done", result, progress: null }));
+              setState((s) => ({ ...s, status: "done", result, progress: null, scope }));
             },
           },
         );
+        // The stream ended cleanly but never delivered a review: that is a
+        // failure, not an empty (clean) review, and must not spin forever.
+        if (!delivered && !controller.signal.aborted) throw new Error(NO_RESULT_MESSAGE);
         return;
       }
 
@@ -181,16 +260,14 @@ export function useReview() {
           result: null,
           docHash: null,
           partial: null,
+          scope: null,
           error:
             "This document is very large. Review it in parts: select a section in Word, then run the review on the selection.",
         });
         return;
       }
 
-      const parts: ContractReviewResponse[] = [];
-      let sectionError: Error | null = null;
-      for (let i = 0; i < sections.length; i++) {
-        if (controller.signal.aborted) return;
+      const outcome = await runSections(sections, async (text, i) => {
         setState((s) => ({
           ...s,
           progress: { step: i + 1, total: sections.length, label: `Reviewing section ${i + 1} of ${sections.length}...` },
@@ -198,7 +275,7 @@ export function useReview() {
         let sectionResult: ContractReviewResponse | null = null;
         try {
           await streamContractReview(
-            { documentText: sections[i], ...base },
+            { documentText: text, ...base },
             {
               signal: controller.signal,
               onProgress: (progress) =>
@@ -215,25 +292,32 @@ export function useReview() {
             },
           );
         } catch (e) {
-          if ((e as Error).name === "AbortError") return;
           // Tolerate a dropped trailing frame if the section result arrived.
-          if (!sectionResult) {
-            // Keep the sections we already completed rather than discarding
-            // billed work; stop here and report a partial review.
-            sectionError = e as Error;
-            break;
-          }
+          if (!sectionResult) throw e;
         }
-        if (sectionResult) parts.push(sectionResult);
-      }
+        return sectionResult;
+      }, () => controller.signal.aborted);
+      if (outcome.aborted) return;
+      const { parts, sectionError } = outcome;
 
       // Nothing completed at all: surface the failure.
-      if (parts.length === 0) throw sectionError ?? new Error("The review returned no results.");
+      if (parts.length === 0) throw sectionError ?? new Error(NO_RESULT_MESSAGE);
 
-      const merged = mergeReviews(parts);
+      // Wording unique within one section may still occur elsewhere in the
+      // document, so re-grade "verified" against the WHOLE text (finding F07).
+      const mergedParts = mergeReviews(parts);
+      const merged = { ...mergedParts, redlines: regradeGrounding(mergedParts.redlines, documentText) };
       delivered = merged;
-      const partial = sectionError ? { done: parts.length, total: sections.length } : null;
-      setState((s) => ({ ...s, status: "done", result: merged, progress: null, partial }));
+      const partial = sectionError
+        ? { done: parts.length, total: sections.length, missing: sections.slice(parts.length).map((s) => sectionLabel(s)) }
+        : null;
+      const scope: ReviewCoverage = {
+        kind: params.scope === "selection" ? "selection" : "document",
+        parts: sections.length,
+        chars: documentText.length,
+        words: countWords(documentText),
+      };
+      setState((s) => ({ ...s, status: "done", result: merged, progress: null, partial, scope }));
     } catch (e) {
       if ((e as Error).name === "AbortError") return;
       if (delivered) {

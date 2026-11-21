@@ -1,6 +1,7 @@
 import { ApiError } from "@/api/errors";
 import { readSse } from "./sse";
 import type { ChatAttachment, ChatRequest, LlmProvider, ProviderId } from "./types";
+import { chatCompletionsFinish } from "./types";
 
 /**
  * A single part of a multimodal Chat Completions message. Plain text messages
@@ -132,27 +133,46 @@ export function makeChatCompletions(cfg: ChatCompletionsConfig): LlmProvider {
     id,
     async chat(req) {
       const res = await post(req, false);
-      const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-      return { text: data.choices?.[0]?.message?.content ?? "" };
+      const data = (await res.json()) as {
+        choices?: { message?: { content?: string }; finish_reason?: string | null }[];
+      };
+      const finishReason = data.choices?.[0]?.finish_reason ?? null;
+      return {
+        text: data.choices?.[0]?.message?.content ?? "",
+        finish: chatCompletionsFinish(finishReason),
+        stopReason: finishReason,
+      };
     },
     async stream(req, onDelta) {
       const res = await post(req, true);
       if (!res.body) throw new ApiError("server", res.status, `${brand} returned an empty stream.`);
       let full = "";
+      // Null until a chunk carries finish_reason; a stream that ends without one
+      // (dropped connection) is reported as incomplete.
+      let finishReason: string | null = null;
       await readSse(res.body, (data) => {
         if (data === "[DONE]") return;
+        let j: {
+          choices?: { delta?: { content?: string }; finish_reason?: string | null }[];
+          error?: { message?: string };
+        };
         try {
-          const j = JSON.parse(data) as { choices?: { delta?: { content?: string } }[] };
-          const piece = j.choices?.[0]?.delta?.content;
-          if (piece) {
-            full += piece;
-            onDelta(piece);
-          }
+          j = JSON.parse(data);
         } catch {
-          // Keepalive or partial frame; ignore.
+          return; // Keepalive or partial frame; ignore.
         }
+        if (j.error) {
+          throw new ApiError("invalid", 0, `${brand} stopped the answer part-way: ${j.error.message ?? "unknown error"}.`);
+        }
+        const piece = j.choices?.[0]?.delta?.content;
+        if (piece) {
+          full += piece;
+          onDelta(piece);
+        }
+        const fr = j.choices?.[0]?.finish_reason;
+        if (fr) finishReason = fr;
       });
-      return { text: full };
+      return { text: full, finish: chatCompletionsFinish(finishReason), stopReason: finishReason };
     },
   };
 }
