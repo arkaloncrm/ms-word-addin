@@ -19,6 +19,37 @@ describe("parseCitations (ArkLaw's jurisdiction tag)", () => {
   });
 });
 
+describe("parseCitations (subsections and markdown, seen in Word 21 Nov 2026)", () => {
+  it("reads a subsection as its section: 'subsection 6(1) of the Act'", () => {
+    expect(parseCitations("The definition is in subsection 6(1) of the Privacy Act 1988 (Cth).")).toEqual([
+      { act: "Privacy Act 1988", sections: ["6"], jurisdiction: "Cth" },
+    ]);
+  });
+
+  it("reads 's 6(1)', 'section 13G(a)' and 'sub-section 6(1)(a)'", () => {
+    expect(parseCitations("s 6(1) of the Privacy Act 1988")[0]?.sections).toEqual(["6"]);
+    expect(parseCitations("section 13G(a) of the Privacy Act 1988")[0]?.sections).toEqual(["13G"]);
+    expect(parseCitations("sub-section 6(1)(a) of the Privacy Act 1988")[0]?.sections).toEqual(["6"]);
+  });
+
+  it("binds a section to an Act written in markdown italics or bold", () => {
+    expect(parseCitations("subsection 6(1) of the *Privacy Act 1988* (Cth)")).toEqual([
+      { act: "Privacy Act 1988", sections: ["6"], jurisdiction: "Cth" },
+    ]);
+    expect(parseCitations("**Corporations Act 2001** s 181(1)")).toEqual([{ act: "Corporations Act 2001", sections: ["181"] }]);
+  });
+
+  it("keeps a list of subsections: 'ss 6(1) and 7(2) of the Act'", () => {
+    expect(parseCitations("Privacy Act 1988 ss 6(1) and 7(2)")[0]?.sections.sort()).toEqual(["6", "7"]);
+  });
+
+  it("still never binds a section to an Act it is not attached to", () => {
+    expect(parseCitations("Section 51(xx) of the Constitution is exercised in the Corporations Act 2001 (Cth).")[0]?.sections).toEqual(
+      [],
+    );
+  });
+});
+
 describe("frl helpers", () => {
   it("builds the register's title search", () => {
     expect(searchPath("Privacy Act 1988", "name", "exact", 25)).toBe(
