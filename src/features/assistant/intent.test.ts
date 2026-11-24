@@ -76,3 +76,55 @@ describe("classifyIntent: other actions read past lead-ins", () => {
     expect(classifyIntent("accept all changes")).toEqual({ action: "accept" });
   });
 });
+
+describe("classifyIntent: comment bubbles (tester request, 24 Nov)", () => {
+  it.each([
+    "put a comment bubble on 9.1 explaining why",
+    "can you add comments to the changes explaining them to the other side",
+    "leave a note on the indemnity for the other side",
+    "please add a comment to clause 7 asking them to confirm the date",
+  ])("drafts a comment: %s", (q) => {
+    expect(classifyIntent(q)).toMatchObject({ action: "edit", explicit: true });
+  });
+
+  it.each(["reply to their comment on clause 7", "can you respond to Jane's comments", "answer the comments"])(
+    "drafts a reply: %s",
+    (q) => {
+      expect(classifyIntent(q)).toMatchObject({ action: "edit", explicit: true });
+    },
+  );
+
+  it("'put that in a comment on 9.1' uses the last answer", () => {
+    expect(classifyIntent("put that in a comment on 9.1")).toMatchObject({ action: "edit", followUp: true });
+  });
+
+  it("'comment on X explaining why...' asks ArkLaw to write it", () => {
+    expect(classifyIntent("comment on the indemnity explaining why it is too broad")).toMatchObject({
+      action: "edit",
+      explicit: true,
+    });
+  });
+
+  it("keeps the quick literal comment for a spelled-out note or a short target", () => {
+    expect(classifyIntent("comment on the liability cap: too low")).toEqual({
+      action: "comment",
+      target: "liability cap",
+      note: "too low",
+    });
+    expect(classifyIntent("flag the indemnity")).toEqual({
+      action: "comment",
+      target: "indemnity",
+      note: "Flagged for review.",
+    });
+  });
+
+  it("a comment on a bare clause number is drafted (the number is not searchable text)", () => {
+    expect(classifyIntent("comment on clause 9.1: check the cap")).toMatchObject({ action: "edit", explicit: true });
+  });
+
+  it("questions about comments stay questions", () => {
+    expect(classifyIntent("can you check my comments")).toEqual({ action: "ask" });
+    expect(classifyIntent("should I add a comment to 9.1?")).toEqual({ action: "ask" });
+    expect(classifyIntent("what do the comments say")).toEqual({ action: "ask" });
+  });
+});

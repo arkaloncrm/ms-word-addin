@@ -26,13 +26,21 @@ export function canAutoApply(r: RedlineSuggestion): boolean {
  */
 export async function applySuggestion(
   r: RedlineSuggestion,
-  opts: { proposed?: string; tracked?: boolean } = {},
-): Promise<void> {
+  /** `comment`: also attach this text as a margin comment on the change. */
+  opts: { proposed?: string; tracked?: boolean; comment?: string | null } = {},
+): Promise<{ commentAdded: boolean }> {
   const proposed = opts.proposed ?? r.proposedLanguage;
   if (r.grounding === "insertion") {
     if (!hasPlacement(placementOf(r))) throw new PlacementNotFoundError();
-    await insertClauseAtAnchor(proposed, placementOf(r), { tracked: opts.tracked });
-    return;
+    const res = await insertClauseAtAnchor(proposed, placementOf(r), {
+      tracked: opts.tracked,
+      comment: opts.comment,
+    });
+    return { commentAdded: res.commentAdded };
   }
-  await applyVerifiedRedline({ ...r, proposedLanguage: proposed }, { tracked: opts.tracked });
+  const res = await applyVerifiedRedline(
+    { ...r, proposedLanguage: proposed },
+    { tracked: opts.tracked, comment: opts.comment },
+  );
+  return { commentAdded: res.commentAdded };
 }

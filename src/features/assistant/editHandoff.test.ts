@@ -33,7 +33,8 @@ describe("proposalHandoff", () => {
     expect(h.display).toBe("yes, can you insert this into the text");
     expect(h.instruction).toContain("Rewrite 9.1 to be supplier friendly");
     expect(h.instruction).toContain("9.1 The Customer indemnifies the Supplier");
-    expect(h.instruction).toMatch(/Never put commentary/);
+    expect(h.instruction).toMatch(/never put commentary/i);
+    expect(h.instruction).toMatch(/put it in comments/);
     expect(h.instruction).toMatch(/consequential amendments/);
   });
 

@@ -35,7 +35,7 @@ export function typedDepth(num: string): number {
 
 /** Leading clause number ("9.1 ", "(a) ", "Clause 4. ") removed, or "" when the
  *  text does not start with one. Mirrors stripLeadingEnumerator in office/search. */
-function withoutNumber(s: string): string {
+export function withoutNumber(s: string): string {
   const stripped = s.replace(
     /^\s*(?:section|article|clause)?\s*(?:\d+(?:\.\d+)*\.?|\([a-z0-9]{1,4}\)|[a-z]{1,2}[.)]|[ivxlcdm]+[.)])\s+/i,
     "",

@@ -54,6 +54,30 @@ export interface ApplyResult {
   strategy: DiffResult["strategyUsed"];
   insertions: number;
   deletions: number;
+  /** Whether the requested margin comment was attached (false when none was
+   *  asked for, or Word would not allow one there). */
+  commentAdded: boolean;
+}
+
+/**
+ * Attach a comment (margin bubble) to `range`, best effort: the change itself
+ * has already gone in, so a comment Word refuses (a footnote, header) must not
+ * turn a successful apply into a failure. Returns whether it was attached.
+ */
+export async function tryAddComment(
+  context: Word.RequestContext,
+  range: Word.Range,
+  text: string | null | undefined,
+): Promise<boolean> {
+  const body = text?.trim();
+  if (!body) return false;
+  try {
+    range.insertComment(body);
+    await context.sync();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** True when the clause is short enough and free of paragraph marks to locate
@@ -170,7 +194,8 @@ async function locateClauseRange(
  */
 export async function applyVerifiedRedline(
   r: RedlineSuggestion,
-  opts: { tracked?: boolean } = {},
+  /** `comment`: also attach this explanation as a margin comment on the clause. */
+  opts: { tracked?: boolean; comment?: string | null } = {},
 ): Promise<ApplyResult> {
   // `tracked` (default) applies the edit as a reviewable tracked change. Passing
   // tracked:false performs a "clean" apply: change tracking is forced off for the
@@ -224,10 +249,12 @@ export async function applyVerifiedRedline(
         enableTracking: tracked,
         logLevel: "error",
       });
+      const commentAdded = await tryAddComment(context, range, opts.comment);
       return {
         strategy: diff.strategyUsed,
         insertions: diff.insertions,
         deletions: diff.deletions,
+        commentAdded,
       };
     } finally {
       // Best-effort restore so a broken context can't mask the original error.

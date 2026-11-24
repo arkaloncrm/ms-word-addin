@@ -66,7 +66,8 @@ export const ASK_CAPABILITIES =
   " ArkLaw can turn wording you propose into tracked changes in the open document: the lawyer asks for it to be inserted or applied, or presses Turn into changes under your answer, and then reviews each change before it goes in. " +
   "So never say you cannot edit the document, and never ask the lawyer to paste wording in themselves. " +
   "When the lawyer asks for a change or new wording, give the exact contract wording in a quote block (lines starting with >), say which clause it replaces or which clause it should follow, and keep your explanation outside the quote block. " +
-  "The Word comments in the document, if any, are listed after the document text under [WORD COMMENTS], with the text each one is attached to. When asked about comments, address each one and the clause it is attached to.";
+  "The Word comments in the document, if any, are listed after the document text under [WORD COMMENTS], with the text each one is attached to. When asked about comments, address each one and the clause it is attached to. " +
+  "ArkLaw can also add comments (the bubbles in Word's margin) and reply to existing ones: when the lawyer asks for that, give the comment text and say which wording it attaches to, and the lawyer adds it with one click. Never say you cannot add or reply to comments.";
 
 /** Grounded assistant chat over the open document (streamed). `officialText` is
  *  section text fetched from the Federal Register of Legislation, if any. */
@@ -434,6 +435,20 @@ export function clauseFixPrompt(clauseName: string, currentLanguage: string, jur
   };
 }
 
+/**
+ * Comments (Word's margin bubbles) in the edit flow. A comment travels inside
+ * the .docx, so by default it is written for the other side to read: never
+ * internal strategy. Exported for tests.
+ */
+export const COMMENT_RULES =
+  'For every edit, "comment" is one or two courteous sentences explaining the change to the other side\'s lawyer, suitable for a comment in the margin. ' +
+  "It must never reveal internal strategy, leverage, priorities, walk-away points or fallback positions. " +
+  'Set "explainInComments" to true only when the lawyer asks for the changes to be explained or justified in comments. ' +
+  'Put a standalone comment in "comments" only when the lawyer asks for a comment, note or bubble, or asks to reply to comments; otherwise leave "comments" empty. ' +
+  "For a new comment, anchor is a short passage (at most about 200 characters) copied VERBATIM from the document, which the comment attaches to, with no clause number, and replyTo is null. " +
+  'To reply to an existing Word comment, replyTo is that comment\'s number in the [WORD COMMENTS] list and anchor is "". ' +
+  "Write comment text for the reader the lawyer names; when unsure, assume the other side will read it. ";
+
 /** How the edit and review models say where NEW wording goes. Exported for tests. */
 export const PLACEMENT_RULES =
   'To ADD new wording with no existing text to replace (a new clause, sub-clause or definition), set currentLanguage to "" and grounding to "insertion", and say where it goes: ' +
@@ -462,7 +477,7 @@ export function editDocumentPrompt(
           .join("\n")
       : "";
   const commentBlock = comments.trim()
-    ? `\n\nWord comments in the document (context only; never quote a comment as currentLanguage or insertAfter):\n${comments.trim()}`
+    ? `\n\nWord comments in the document (numbered; to reply to one, use its number as replyTo; never quote a comment as currentLanguage, insertAfter or anchor):\n${comments.trim()}`
     : "";
   return {
     system:
@@ -474,11 +489,15 @@ export function editDocumentPrompt(
       `Include consequential amendments (a new defined term, a cross-reference, another clause that relies on the change) as edits of their own. ` +
       `proposedLanguage holds only contract wording: no commentary, questions, notes, labels or markdown. ` +
       `Set grounding to "verified" only when currentLanguage is an exact substring of the document, else "unverified". ` +
+      COMMENT_RULES +
+      `If the lawyer only asks for comments or replies, return no edits. ` +
       `Produce only the changed passages, not the whole document. ${JSON_ONLY} ` +
       `Schema: {"overview": string, "edits": [{"label": string, "sectionReference": string|null, ` +
       `"currentLanguage": string, "proposedLanguage": string, "rationale": string, "fallbackPosition": string|null, ` +
       `"grounding": "verified"|"unverified"|"insertion", "insertAfter": string|null, "insertAfterClause": string|null, ` +
-      `"nature": "substantive"|"housekeeping"}], "summary": string}.`,
+      `"nature": "substantive"|"housekeeping", "comment": string}], ` +
+      `"comments": [{"label": string, "sectionReference": string|null, "anchor": string, "text": string, "replyTo": number|null}], ` +
+      `"explainInComments": boolean, "summary": string}.`,
     user: `Instruction: ${instruction}${priorBlock}${commentBlock}\n\nDocument:\n${documentText.slice(0, 200_000)}`,
   };
 }

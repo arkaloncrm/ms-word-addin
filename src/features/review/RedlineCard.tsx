@@ -199,6 +199,7 @@ export function RedlineCard({
   fixContext,
   onApplied,
   externalError,
+  commentOnApply,
 }: {
   redline: RedlineSuggestion;
   index: number;
@@ -217,6 +218,9 @@ export function RedlineCard({
   /** A failure reported for this card by a batch "Apply all", shown on the card
    *  so the lawyer can see which change did not go in and why. */
   externalError?: { message: string; unplaced?: boolean } | null;
+  /** When set ("Explain each change in a comment bubble" is on), applying this
+   *  card also adds this text as a Word comment on the changed wording. */
+  commentOnApply?: string | null;
 }) {
   const { navigate } = useAppNav();
   const [busy, setBusy] = useState(false);
@@ -328,7 +332,7 @@ export function RedlineCard({
     setApplyBusy?.(true);
     setNote(null);
     try {
-      await applySuggestion(active, { proposed, tracked });
+      await applySuggestion(active, { proposed, tracked, comment: commentOnApply });
       decide("accepted");
       onApplied?.();
     } catch (e) {
@@ -711,6 +715,12 @@ export function RedlineCard({
         ) : (
           <p className="small muted" style={{ margin: 0 }}>{rationale}</p>
         ))}
+
+      {commentOnApply?.trim() && (
+        <p className="small redline__bubble" style={{ margin: 0 }}>
+          <strong>Comment bubble:</strong> <span className="muted">{commentOnApply.trim()}</span>
+        </p>
+      )}
 
       {active.fallbackPosition?.trim() && (
         <p className="small redline__fallback" style={{ margin: 0 }}>

@@ -50,8 +50,9 @@ export function lastExchange(
 
 /** The standing rule for every handoff: contract wording only, never chat. */
 const WORDING_ONLY =
-  "Use only proposed contract wording. Never put commentary, explanations, questions, notes or headings like \"Proposed clause\" into the document. " +
-  "Locate each change in the clause it belongs to, and give each change, including consequential amendments, as its own edit.";
+  "Edits hold only proposed contract wording: never put commentary, explanations, questions, notes or headings like \"Proposed clause\" into the contract text. " +
+  "Locate each change in the clause it belongs to, and give each change, including consequential amendments, as its own edit. " +
+  "If the lawyer asks for a comment, note or reply, put it in comments instead.";
 
 /**
  * "Apply what you proposed": the earlier answer IS the instruction. Used for
@@ -67,7 +68,7 @@ export function proposalHandoff(
   const instruction =
     `${asked}ArkLaw proposed this in its answer:\n"""\n${clip(exchange.answer, PROPOSAL_MAX)}\n"""\n` +
     `Now the lawyer says: "${request.trim()}"\n` +
-    `Turn the contract wording proposed in that answer into edits to the document. ${WORDING_ONLY}`;
+    `Carry out the lawyer's request using that answer: contract wording it proposes becomes edits to the document. ${WORDING_ONLY}`;
   return { instruction, display: request.trim() };
 }
 

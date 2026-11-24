@@ -290,6 +290,14 @@
 .redline__note--err {
   color: var(--red);
 }
+/* Preview of the comment a card will add when the switch is on. */
+.redline__bubble {
+  margin: 0;
+  padding: 6px 8px;
+  border-left: 3px solid var(--brand);
+  background: var(--brand-tint);
+  border-radius: var(--radius-sm);
+}
 /* A new clause that could not be placed: say so, and offer Copy, Show me where
    and an explicit Insert at cursor. */
 .redline__unplaced {

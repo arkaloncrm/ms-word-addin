@@ -35,11 +35,29 @@ export interface EditItem {
   insertAfter?: string | null;
   /** Insertions: number of the clause the new wording follows ("2.2"). */
   insertAfterClause?: string | null;
+  /** A courteous explanation of the change for a margin comment. */
+  comment?: string | null;
+}
+
+/**
+ * A Word comment (margin bubble) the model proposes: a new comment attached to
+ * `anchor` (verbatim document text), or a reply to an existing comment, by its
+ * number in the [WORD COMMENTS] list the model was shown (`replyTo`, 1-based).
+ * Nothing is added until the lawyer clicks Add / Post reply.
+ */
+export interface CommentProposal {
+  label: string;
+  sectionReference?: string | null;
+  anchor: string;
+  text: string;
+  replyTo?: number | null;
 }
 
 interface EditResponse {
   overview?: string;
   edits: EditItem[];
+  comments?: CommentProposal[];
+  explainInComments?: boolean;
   summary?: string;
 }
 
@@ -48,6 +66,9 @@ interface EditResponse {
 export interface EditResult {
   overview: string;
   edits: EditItem[];
+  comments: CommentProposal[];
+  /** The lawyer asked for the changes to be explained in comments. */
+  explainInComments: boolean;
   summary: string;
 }
 
@@ -81,7 +102,13 @@ export async function editDocument(
     body,
     signal,
   });
-  return { overview: res.overview ?? "", edits: res.edits ?? [], summary: res.summary ?? "" };
+  return {
+    overview: res.overview ?? "",
+    edits: res.edits ?? [],
+    comments: res.comments ?? [],
+    explainInComments: res.explainInComments === true,
+    summary: res.summary ?? "",
+  };
 }
 
 /** Incremental handlers for the streaming edit. `onMeta` fires once with the
@@ -90,7 +117,15 @@ export async function editDocument(
 export interface EditStreamHandlers {
   onMeta?: (sections: number) => void;
   onEdit: (edit: EditItem) => void;
-  onDone?: (result: { overview: string; summary: string; count: number }) => void;
+  /** A proposed comment or reply (community edition; the hosted stream may
+   *  never send one). */
+  onComment?: (comment: CommentProposal) => void;
+  onDone?: (result: {
+    overview: string;
+    summary: string;
+    count: number;
+    explainInComments: boolean;
+  }) => void;
   signal?: AbortSignal;
 }
 
@@ -139,12 +174,23 @@ export async function streamEditDocument(
           if (p?.edit) handlers.onEdit(p.edit);
           break;
         }
+        case "comment": {
+          const p = safeParse<{ comment?: CommentProposal }>(data);
+          if (p?.comment) handlers.onComment?.(p.comment);
+          break;
+        }
         case "summary": {
-          const p = safeParse<{ overview?: string; summary?: string; count?: number }>(data);
+          const p = safeParse<{
+            overview?: string;
+            summary?: string;
+            count?: number;
+            explainInComments?: boolean;
+          }>(data);
           handlers.onDone?.({
             overview: p?.overview ?? "",
             summary: p?.summary ?? "",
             count: p?.count ?? 0,
+            explainInComments: p?.explainInComments === true,
           });
           break;
         }
@@ -181,5 +227,6 @@ export function editToRedline(e: EditItem): RedlineSuggestion {
     nature: e.nature,
     insertAfter: e.insertAfter ?? null,
     insertAfterClause: e.insertAfterClause ?? null,
+    marginComment: e.comment?.trim() || null,
   };
 }
