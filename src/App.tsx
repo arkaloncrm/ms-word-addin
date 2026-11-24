@@ -26,6 +26,7 @@ import { PlaybookView } from "@/features/playbook/PlaybookView";
 import { ToolsHub } from "@/features/toolshub/ToolsHub";
 import { ReviewProvider } from "@/features/review/ReviewProvider";
 import { SettingsView } from "@/features/settings/SettingsView";
+import { SuggestFeature } from "@/features/feedback/SuggestFeature";
 import { ContextBar } from "@/features/shell/ContextBar";
 import { AppNavProvider, useAppNav, type AppTab, type ReviewSub } from "@/app/nav";
 import { TourProvider, useTour } from "@/tour/TourProvider";
@@ -206,6 +207,8 @@ function AppShell() {
             })}
           </nav>
           <div className="appbar__right">
+            {/* Trial only: shown when the server has feature requests switched on. */}
+            <SuggestFeature />
             <div className="appbar__guides" data-tour="help" style={{ position: "relative" }}>
               <IconButton
                 label="Guides and walkthroughs"

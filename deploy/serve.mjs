@@ -10,6 +10,7 @@ import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { handleFeatureRequest } from "./feature-request.mjs";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const ROOT = resolve(process.env.ARKLAW_DIST ?? join(here, "..", "dist"));
@@ -101,6 +102,12 @@ async function serveFile(res, file, cacheControl) {
 
 const server = createServer(async (req, res) => {
   try {
+    // Trial-only "Suggest a feature" endpoint (see feature-request.mjs). Same
+    // origin, so the CSP's connect-src 'self' already allows the pane to call it.
+    if ((req.url ?? "").split("?")[0] === "/api/feature-request") {
+      await handleFeatureRequest(req, res, { send, host: publicHost(req) });
+      return;
+    }
     if (req.method !== "GET" && req.method !== "HEAD") {
       return send(res, 405, { "Content-Type": "text/plain", Allow: "GET, HEAD" }, "Method not allowed\n");
     }

@@ -29,6 +29,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/dist ./dist
 COPY deploy/serve.mjs ./deploy/serve.mjs
+COPY deploy/feature-request.mjs ./deploy/feature-request.mjs
 COPY manifest.arklaw.xml ./manifest.arklaw.xml
 USER node
 EXPOSE 8080
