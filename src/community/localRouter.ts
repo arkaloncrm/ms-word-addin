@@ -22,6 +22,8 @@ import {
 import { normalizeParties } from "@/lib/parties";
 import { groundingFor } from "@/lib/grounding";
 import { groundPlacement } from "@/lib/placement";
+import { groundComments } from "@/lib/commentProposals";
+import type { CommentProposal } from "@/api/edit";
 import { listDefinedTerms } from "@/lib/defined-terms";
 import { shapeDraftHere } from "@/features/drafthere/shape";
 import { DRAFT_HERE_PATH } from "@/api/draft-here";
@@ -218,6 +220,8 @@ async function handleLlm(path: string, body: Record<string, unknown>): Promise<u
 export interface CommunityEditResult {
   overview: string;
   edits: Record<string, unknown>[];
+  comments: CommentProposal[];
+  explainInComments: boolean;
   summary: string;
 }
 
@@ -280,8 +284,17 @@ function groundEdits(documentText: string, raw: Record<string, unknown>): Commun
       // is dropped (never searched for), and the card then offers the lawyer the
       // choice instead of guessing a spot.
       ...(isInsertion ? groundPlacement(e, documentText) : {}),
+      // A courteous explanation for a margin comment (used only when the lawyer
+      // chooses to explain changes in comment bubbles).
+      comment: str(e.comment).slice(0, 2_000) || null,
     }));
-  return { overview: str(raw.overview), edits, summary: str(raw.summary) };
+  return {
+    overview: str(raw.overview),
+    edits,
+    comments: groundComments(raw.comments, documentText),
+    explainInComments: raw.explainInComments === true,
+    summary: str(raw.summary),
+  };
 }
 
 interface StoredPlaybook {

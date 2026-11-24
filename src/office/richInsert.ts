@@ -7,6 +7,7 @@ import { resolveAfterAnchor } from "./anchor";
 import { OfficeError, runWord, serializeTrackChanges } from "./run";
 import { locateInsertionAnchor, type InsertPlacement } from "./insertAnchor";
 import { stripLeadingEnumerator } from "./search";
+import { tryAddComment } from "./redline";
 import { sampleInsertionFont, matchInsertedFont } from "./font";
 import { inheritListNumbering } from "./lists";
 
@@ -317,8 +318,9 @@ async function afterAnchor(
 export async function insertClauseAtAnchor(
   text: string,
   placement: InsertPlacement,
-  opts: { tracked?: boolean } = {},
-): Promise<{ via: "text" | "number" }> {
+  /** `comment`: also attach this explanation as a margin comment on the new wording. */
+  opts: { tracked?: boolean; comment?: string | null } = {},
+): Promise<{ via: "text" | "number"; commentAdded: boolean }> {
   const tracked = opts.tracked ?? true;
   const blocks = clauseBlocks(text);
   return serializeTrackChanges(() =>
@@ -341,6 +343,7 @@ export async function insertClauseAtAnchor(
       const firstText = autoNumbered ? stripLeadingEnumerator(first) || first : first;
 
       const priorMode = doc.changeTrackingMode;
+      let commentAdded = false;
       try {
         doc.changeTrackingMode = tracked ? Word.ChangeTrackingMode.trackAll : Word.ChangeTrackingMode.off;
         await context.sync();
@@ -354,6 +357,11 @@ export async function insertClauseAtAnchor(
         // Only the first paragraph takes a clause number; any body paragraphs
         // stay out of the list so each does not take a number of its own.
         await inheritListNumbering(context, located.levelSource, [head]);
+        commentAdded = await tryAddComment(
+          context,
+          head.getRange(Word.RangeLocation.whole).expandTo(cursor.getRange(Word.RangeLocation.whole)),
+          opts.comment,
+        );
       } finally {
         try {
           doc.changeTrackingMode = priorMode;
@@ -362,7 +370,7 @@ export async function insertClauseAtAnchor(
           // original error (if any) propagates
         }
       }
-      return { via: located.via };
+      return { via: located.via, commentAdded };
     }),
   );
 }

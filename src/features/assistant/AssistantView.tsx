@@ -21,7 +21,10 @@ import { useAppNav } from "@/app/nav";
 import { insertCommentAnchored, deleteAllComments, readDocumentComments } from "@/office/comments";
 import { formatCommentsForAi } from "@/lib/wordComments";
 import { lastExchange, proposalHandoff, requestHandoff, type EditHandoff } from "./editHandoff";
-import { EditApplyAll, type CardError } from "./EditApplyAll";
+import { type CardError } from "./EditApplyAll";
+import { EditTurnCards } from "./EditTurnCards";
+import type { CommentProposal } from "@/api/edit";
+import type { DocumentComment } from "@/lib/wordComments";
 
 /** Actionable (non-ask) intents that get staged for an explicit confirm. */
 type ActionIntent = Exclude<Intent, { action: "ask" }>;
@@ -68,7 +71,6 @@ import { SelectionTools } from "@/features/tools/SelectionTools";
 import { QuotaBanner } from "@/features/usage/QuotaBanner";
 import { getReviewPrefs, subscribeReviewPrefs } from "@/lib/prefs";
 import { formatRelativeTime } from "@/lib/relativeTime";
-import { RedlineCard } from "@/features/review/RedlineCard";
 import { streamEditDocument, editDocument, editToRedline } from "@/api/edit";
 import { readFullDocumentText, readStructuredDocumentText } from "@/office/document";
 import { errorMessage, ApiError } from "@/api/errors";
@@ -88,7 +90,27 @@ interface EditTurn {
   request: string;
   overview: string;
   redlines: RedlineSuggestion[];
+  /** Proposed Word comments and replies (margin bubbles). */
+  notes: CommentProposal[];
+  /** The Word comments read when this turn was drafted; a reply's replyTo is
+   *  its 1-based position in this list. */
+  commentTargets: DocumentComment[];
   summary: string;
+}
+
+/** True when a turn produced nothing to show (no edits and no comments). */
+function turnEmpty(t: EditTurn): boolean {
+  return t.redlines.length === 0 && t.notes.length === 0;
+}
+
+// "Explain each change in a comment bubble", remembered on this computer.
+const EXPLAIN_KEY = "arklaw.explainChangesInComments";
+function loadExplain(): boolean {
+  try {
+    return localStorage.getItem(EXPLAIN_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 /** Stable identity of an edit by its content (the anchor it replaces + the text
@@ -215,11 +237,9 @@ export function AssistantView({
   editDecisionsRef.current = editDecisions;
   const editDecisionOf = (r: RedlineSuggestion): Decision =>
     editDecisions[editKey(r)] ?? "pending";
-  const editDecisionOfLive = (r: RedlineSuggestion): Decision =>
-    editDecisionsRef.current[editKey(r)] ?? "pending";
-  const setEditDecision = (r: RedlineSuggestion, d: Decision) =>
+  const setDecisionByKey = (key: string, d: Decision) =>
     setEditDecisions((p) => {
-      const next = { ...p, [editKey(r)]: d };
+      const next = { ...p, [key]: d };
       editDecisionsRef.current = next;
       return next;
     });
@@ -227,6 +247,16 @@ export function AssistantView({
   // per-card failures Apply all reported.
   const [editApplyBusy, setEditApplyBusy] = useState(false);
   const [cardErrors, setCardErrors] = useState<Record<string, CardError>>({});
+  const [explainBubbles, setExplainBubblesState] = useState(loadExplain);
+  function setExplainBubbles(on: boolean) {
+    setExplainBubblesState(on);
+    try {
+      if (on) localStorage.setItem(EXPLAIN_KEY, "1");
+      else localStorage.removeItem(EXPLAIN_KEY);
+    } catch {
+      // storage blocked: the switch still works for this session
+    }
+  }
   // A selection tool the shell asked us to open (Explain / Risk / Rewrite ...).
   const [selTool, setSelTool] = useState<SelectionToolKey | undefined>(undefined);
   // Composer draft is owned here so the prompt library and edit-and-re-run can
@@ -342,10 +372,21 @@ export function AssistantView({
       setEditTurns((prev0) => {
         const prev = opts.fresh ? [] : prev0;
         const base =
-          prev.length > 0 && prev[prev.length - 1].redlines.length === 0
+          prev.length > 0 && turnEmpty(prev[prev.length - 1])
             ? prev.slice(0, -1)
             : prev;
-        return [...base, { instruction: display, request: instr, overview: "", redlines: [], summary: "" }];
+        return [
+          ...base,
+          {
+            instruction: display,
+            request: instr,
+            overview: "",
+            redlines: [],
+            notes: [],
+            commentTargets: commentsRead.comments,
+            summary: "",
+          },
+        ];
       });
       // Append into the LAST turn (the shell just created). editBusy prevents a
       // second turn starting mid-stream, so "last" is unambiguous.
@@ -365,9 +406,16 @@ export function AssistantView({
             const rl = editToRedline(item);
             appendToLast((t) => ({ ...t, redlines: [...t.redlines, rl] }));
           },
-          onDone: ({ overview, summary }) => {
+          onComment: (c) => {
+            if (controller.signal.aborted) return;
+            appendToLast((t) => ({ ...t, notes: [...t.notes, c] }));
+          },
+          onDone: ({ overview, summary, explainInComments }) => {
             if (controller.signal.aborted) return;
             appendToLast((t) => ({ ...t, overview, summary }));
+            // The lawyer asked for the changes to be explained in comments:
+            // switch it on for this session (their saved default is unchanged).
+            if (explainInComments) setExplainBubblesState(true);
           },
         });
       } catch (e) {
@@ -383,8 +431,10 @@ export function AssistantView({
           ...t,
           overview: res.overview,
           redlines: res.edits.map(editToRedline),
+          notes: res.comments,
           summary: res.summary,
         }));
+        if (res.explainInComments) setExplainBubblesState(true);
       }
       // Decisions are content-keyed and intentionally NOT reset here: an edit that
       // survives the refine unchanged keeps its accept/reject decision.
@@ -396,7 +446,7 @@ export function AssistantView({
         // completed empty turn from earlier is never touched. A partially
         // streamed turn (redlines > 0) is kept.
         setEditTurns((prev) =>
-          prev.length && prev[prev.length - 1].redlines.length === 0 ? prev.slice(0, -1) : prev,
+          prev.length && turnEmpty(prev[prev.length - 1]) ? prev.slice(0, -1) : prev,
         );
         return;
       }
@@ -780,47 +830,32 @@ export function AssistantView({
                       </div>
                       {turn.overview && <p className="edit-turn__prose">{turn.overview}</p>}
                       {isLast &&
-                        (turn.redlines.length > 0 ? (
-                          <div className="stack">
-                            <span className="small muted">
-                              {turn.redlines.length} proposed edit
-                              {turn.redlines.length === 1 ? "" : "s"}
-                            </span>
-                            {!editBusy && (
-                              <EditApplyAll
-                                redlines={turn.redlines}
-                                keyOf={editKey}
-                                decisionOf={editDecisionOf}
-                                decisionOfLive={editDecisionOfLive}
-                                setDecision={setEditDecision}
-                                applyBusy={editApplyBusy}
-                                setApplyBusy={setEditApplyBusy}
-                                onApplied={() => setAppliedTick((n) => n + 1)}
-                                onErrors={setCardErrors}
-                              />
-                            )}
-                            {turn.redlines.map((r, i) => (
-                              <RedlineCard
-                                key={`${editKey(r)}::${i}`}
-                                redline={r}
-                                index={i}
-                                decision={editDecisionOf(r)}
-                                onDecision={(_idx, d) => setEditDecision(r, d)}
-                                onApplied={() => setAppliedTick((n) => n + 1)}
-                                applyBusy={editApplyBusy}
-                                setApplyBusy={setEditApplyBusy}
-                                externalError={cardErrors[editKey(r)] ?? null}
-                              />
-                            ))}
-                          </div>
+                        (!turnEmpty(turn) ? (
+                          <EditTurnCards
+                            redlines={turn.redlines}
+                            notes={turn.notes}
+                            commentTargets={turn.commentTargets}
+                            keyOf={editKey}
+                            decisionOf={(k) => editDecisions[k] ?? "pending"}
+                            decisionOfLive={(k) => editDecisionsRef.current[k] ?? "pending"}
+                            setDecision={setDecisionByKey}
+                            applyBusy={editApplyBusy}
+                            setApplyBusy={setEditApplyBusy}
+                            cardErrors={cardErrors}
+                            setCardErrors={setCardErrors}
+                            onApplied={() => setAppliedTick((n) => n + 1)}
+                            showApplyAll={!editBusy}
+                            explain={explainBubbles}
+                            setExplain={setExplainBubbles}
+                          />
                         ) : editBusy ? (
                           // In-flight shell turn: the spinner below carries the
                           // state. Do NOT show the "no grounded edits" verdict yet.
                           null
                         ) : (
                           <Banner tone="info">
-                            No grounded edits were proposed for that instruction. Try being more
-                            specific.
+                            No changes or comments were proposed for that instruction. Try being
+                            more specific.
                           </Banner>
                         ))}
                       {isLast && turn.summary && (

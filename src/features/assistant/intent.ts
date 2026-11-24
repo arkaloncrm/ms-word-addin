@@ -121,6 +121,16 @@ const INTO_DOC =
 const APPLY_CHANGES =
   /\b(?:apply|make|action|implement|insert|incorporate|use)\s+(?:this|that|these|those|the|your|them)\s+(?:changes?|edits?|amendments?|suggestions?|rewrites?|redrafts?|wording|drafting|clauses?|redlines?|versions?|definitions?)\b/i;
 
+// A request for a Word comment (margin bubble): "put a comment on 9.1 explaining
+// why", "add comment bubbles to the changes", "leave a note for the other side".
+// ArkLaw drafts the comment text; the lawyer adds it from a card.
+const COMMENT_REQUEST =
+  /\b(?:add|put|leave|insert|write|make|drop|place|attach|include|draft)\b[^.?!]{0,50}?\b(?:comments?|notes?|bubbles?)\b/i;
+
+// A request to answer existing Word comments: "reply to their comment on 7",
+// "respond to Jane's comments".
+const REPLY_REQUEST = /\b(?:reply|respond|answer)\b[^.?!]{0,60}?\bcomments?\b/i;
+
 // "insert" as a verb anywhere ("suggest one and insert it") asks for a change.
 // "inserted" / "insertion" are not matched (\b after insert).
 const INSERT_VERB = /\binsert\b/i;
@@ -165,8 +175,20 @@ export function classifyIntent(text: string): Intent {
     // "flag any issues" / "flag the risks" are questions, not comment requests:
     // a vague target means the user wants an answer, not a comment on that text.
     const vague = /^(any|all)?\s*(issues?|problems?|risks?|concerns?|red flags?|anything|everything)$/i;
-    if (target.length >= 3 && !vague.test(target)) {
+    // The quick literal path (no AI) only for a note the lawyer spelled out
+    // ("comment on 9.1: check the cap") or a short target ("flag the
+    // indemnity"). "comment on the indemnity explaining why it is too broad"
+    // asks ArkLaw to WRITE the comment, so it goes to the drafting flow below.
+    // A bare clause number ("clause 9.1") is not searchable text when Word
+    // numbers the clauses itself, so that also goes to drafting, which anchors
+    // the comment on the clause's own words.
+    const clauseRef = /^(?:clause|section|paragraph)?\s*(?:\d+(?:\.\d+)*|\([a-z0-9]{1,4}\))$/i.test(target);
+    const literal = !clauseRef && (colon >= 0 || (target.split(/\s+/).length <= 4 && target.length <= 40));
+    if (literal && target.length >= 3 && !vague.test(target)) {
       return { action: "comment", target, note: note || "Flagged for review." };
+    }
+    if (!vague.test(target)) {
+      return { action: "edit", explicit: true, followUp: false };
     }
   }
 
@@ -186,6 +208,11 @@ export function classifyIntent(text: string): Intent {
   const core = stripLeadIns(t);
   const coreLower = core.toLowerCase();
   if (!QUESTION_START.test(core)) {
+    // Comments and replies are drafted by the Edit flow as cards.
+    if (COMMENT_REQUEST.test(core) || REPLY_REQUEST.test(core)) {
+      const followUp = DEICTIC.test(core) && !ASKS_FOR_NEW.test(core) && core.length <= 240;
+      return { action: "edit", explicit: true, followUp };
+    }
     // An explicit request to change the document runs the Edit flow directly.
     if (INTO_DOC.test(core) || APPLY_CHANGES.test(core) || INSERT_VERB.test(core)) {
       const followUp = DEICTIC.test(core) && !ASKS_FOR_NEW.test(core) && core.length <= 240;

@@ -31,6 +31,10 @@ export interface RedlineSuggestion {
   /** Insertions only: the number of the clause the new wording follows ("2.2"),
    *  a fallback locator that still works when tracked changes defeat a search. */
   insertAfterClause?: string | null;
+  /** A courteous explanation of the change for the other side, added as a Word
+   *  comment (margin bubble) on the changed text when the lawyer chooses
+   *  "Explain each change in a comment bubble". Never internal strategy. */
+  marginComment?: string | null;
   /** Why a redline is "unverified" (not found word for word, or found more
    *  than once), shown with the badge. See src/lib/grounding.ts. */
   groundingNote?: string;

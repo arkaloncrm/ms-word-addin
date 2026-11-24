@@ -89,12 +89,17 @@ async function editStream(body: unknown, opts: StreamHandlers): Promise<void> {
       if (opts.signal?.aborted) return;
       opts.onEvent({ event: "edit", data: JSON.stringify({ edit }) });
     }
+    for (const comment of result.comments) {
+      if (opts.signal?.aborted) return;
+      opts.onEvent({ event: "comment", data: JSON.stringify({ comment }) });
+    }
     opts.onEvent({
       event: "summary",
       data: JSON.stringify({
         overview: result.overview,
         summary: result.summary,
         count: result.edits.length,
+        explainInComments: result.explainInComments,
       }),
     });
   } catch (e) {

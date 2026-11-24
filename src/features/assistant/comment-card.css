@@ -1,0 +1,23 @@
+/* A proposed Word comment (margin bubble): the text reads like a note, in a
+   soft panel, so it is clearly not contract wording. */
+.comment-card__text {
+  margin: 0;
+  padding: 7px 9px;
+  border-left: 3px solid var(--brand);
+  border-radius: var(--radius-sm);
+  background: var(--brand-tint);
+  font-size: var(--fs-small);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* "Explain each change in a comment bubble" switch above the cards. */
+.explain-toggle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}

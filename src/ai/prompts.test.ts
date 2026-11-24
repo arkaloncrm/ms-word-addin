@@ -186,7 +186,7 @@ describe("placement and edit rules (tester fix, 24 Nov)", () => {
     const { editDocumentPrompt } = await import("./prompts");
     expect(editDocumentPrompt("Doc.", "x", undefined, [], []).user).not.toMatch(/Word comments/);
     const withComments = editDocumentPrompt("Doc.", "x", undefined, [], [], "1. Jane (open) on \"x\": fix this").user;
-    expect(withComments).toMatch(/Word comments in the document \(context only/);
+    expect(withComments).toMatch(/Word comments in the document \(numbered; to reply to one/);
     expect(withComments).toContain("fix this");
   });
 
@@ -203,5 +203,23 @@ describe("placement and edit rules (tester fix, 24 Nov)", () => {
     expect(s).toContain(ASK_CAPABILITIES);
     expect(s).toMatch(/never say you cannot edit the document/);
     expect(s).toMatch(/\[WORD COMMENTS\]/);
+  });
+});
+
+describe("comment rules (tester request, 24 Nov)", () => {
+  it("the edit prompt asks for a per-edit comment, standalone comments and replies, never strategy", async () => {
+    const { editDocumentPrompt, COMMENT_RULES } = await import("./prompts");
+    const s = editDocumentPrompt("Doc.", "x", undefined, [], []).system;
+    expect(s).toContain(COMMENT_RULES);
+    expect(s).toMatch(/"comment": string/);
+    expect(s).toMatch(/"comments": \[\{"label": string, "sectionReference": string\|null, "anchor": string, "text": string, "replyTo": number\|null\}\]/);
+    expect(s).toMatch(/"explainInComments": boolean/);
+    expect(COMMENT_RULES).toMatch(/never reveal internal strategy/);
+  });
+
+  it("Ask is told it can add and reply to comments", async () => {
+    const { ASK_CAPABILITIES } = await import("./prompts");
+    expect(ASK_CAPABILITIES).toMatch(/add comments/);
+    expect(ASK_CAPABILITIES).toMatch(/Never say you cannot add or reply to comments/);
   });
 });
