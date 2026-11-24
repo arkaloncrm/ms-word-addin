@@ -1,5 +1,5 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import { configDefaults } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { existsSync, readFileSync } from "node:fs";
@@ -11,6 +11,27 @@ import { resolve } from "node:path";
 const pkgVersion = (
   JSON.parse(readFileSync(resolve(__dirname, "package.json"), "utf8")) as { version?: string }
 ).version ?? "0.0.0";
+
+// Build id: when this bundle was built (ISO, UTC). Written into the bundle as
+// __BUILD_ID__ and into dist/version.json, so a pane that has been open for a
+// while (or that Word served from its cache) can tell a newer version is live
+// and offer to reload. ISO strings compare correctly as plain strings.
+const buildId = new Date().toISOString();
+
+/** Emit dist/version.json ({ version, buildId }) for the in-pane update check. */
+function versionFile(): Plugin {
+  return {
+    name: "arklaw-version-file",
+    apply: "build",
+    generateBundle() {
+      this.emitFile({
+        type: "asset",
+        fileName: "version.json",
+        source: JSON.stringify({ version: pkgVersion, buildId }),
+      });
+    },
+  };
+}
 
 // Local HTTPS for the dev server (Office requires HTTPS, even on localhost).
 // Order: explicit cert paths from env (office-addin-debugging sets these), then
@@ -35,9 +56,10 @@ function devHttps() {
 //   dictation.html  the microphone dialog (the pane iframe cannot get the mic)
 // Office requires HTTPS in production; local dev uses the office-addin dev certs.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), versionFile()],
   define: {
     __APP_VERSION__: JSON.stringify(pkgVersion),
+    __BUILD_ID__: JSON.stringify(buildId),
   },
   resolve: {
     alias: { "@": resolve(__dirname, "src") },

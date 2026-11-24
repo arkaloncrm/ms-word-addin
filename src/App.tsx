@@ -27,6 +27,7 @@ import { ToolsHub } from "@/features/toolshub/ToolsHub";
 import { ReviewProvider } from "@/features/review/ReviewProvider";
 import { SettingsView } from "@/features/settings/SettingsView";
 import { SuggestFeature } from "@/features/feedback/SuggestFeature";
+import { UpdateBanner } from "@/features/settings/UpdateBanner";
 import { ContextBar } from "@/features/shell/ContextBar";
 import { AppNavProvider, useAppNav, type AppTab, type ReviewSub } from "@/app/nav";
 import { TourProvider, useTour } from "@/tour/TourProvider";
@@ -270,6 +271,11 @@ function AppShell() {
       )}
 
       {authed && !showSettings && <ContextBar />}
+      {authed && (
+        <div className="app-update">
+          <UpdateBanner />
+        </div>
+      )}
 
       <div
         className="app-body"
