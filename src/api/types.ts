@@ -22,9 +22,15 @@ export interface RedlineSuggestion {
   /**
    * verified   = currentLanguage is a literal substring of the source (safe to auto-apply)
    * unverified = could not be confirmed verbatim (show, do not auto-apply)
-   * insertion  = a missing clause to add (no anchor; insert at a chosen location)
+   * insertion  = new wording to add; it goes where insertAfter / insertAfterClause say
    */
   grounding: Grounding;
+  /** Insertions only: verbatim words from the END of the paragraph the new
+   *  wording follows. Located in the document before inserting. */
+  insertAfter?: string | null;
+  /** Insertions only: the number of the clause the new wording follows ("2.2"),
+   *  a fallback locator that still works when tracked changes defeat a search. */
+  insertAfterClause?: string | null;
   /** Why a redline is "unverified" (not found word for word, or found more
    *  than once), shown with the badge. See src/lib/grounding.ts. */
   groundingNote?: string;

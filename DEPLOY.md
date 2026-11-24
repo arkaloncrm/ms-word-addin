@@ -61,6 +61,25 @@ No account, no backend, nothing to operate.
 To ship an update, rebuild `dist/` and re-upload.
 Users only need to re-sideload if the manifest itself changed (a new domain or id); a content-only update is picked up automatically.
 
+### ArkLaw on Railway: "Suggest a feature" (trial only)
+
+The ArkLaw Railway service (`railway.json` -> `Dockerfile.community` -> `deploy/serve.mjs`) can email testers' feature requests to you.
+A lightbulb button appears in the pane header only while this is configured; a static host without `serve.mjs` simply never shows it.
+
+Set these in the Railway service's **Variables** (never in the client code or `.env` files):
+
+| Variable | Value |
+| --- | --- |
+| `RESEND_API_KEY` | an API key from resend.com (required) |
+| `FEATURE_REQUEST_TO` | the address the requests go to (required) |
+| `FEATURE_REQUEST_FROM` | optional sender, e.g. `ArkLaw <feedback@yourdomain>` on a domain verified in Resend. Without it, Resend's test sender is used, which only delivers to the Resend account owner's own address. |
+| `FEATURE_REQUESTS` | set to `off` to switch the feature off when the trial ends (the button disappears) |
+
+Each email carries the request text, whether it was typed or dictated, the date and time, the add-in version and Word version, and the tester's name or email only if they typed one in.
+No document text is ever sent.
+The endpoint is same-origin only, caps a request at 2,000 characters (8 KB body), and allows 5 requests per IP per 15 minutes and 60 per hour in total.
+Dictation uses the browser's built-in speech recognition, which sends the audio to the browser's or Windows' speech service to transcribe it; the form says so.
+
 ---
 
 ## Hosting the full hosted build

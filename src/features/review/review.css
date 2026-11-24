@@ -290,6 +290,18 @@
 .redline__note--err {
   color: var(--red);
 }
+/* A new clause that could not be placed: say so, and offer Copy, Show me where
+   and an explicit Insert at cursor. */
+.redline__unplaced {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-sm);
+  background: var(--warning-tint);
+  color: var(--warning);
+}
 
 /* Collapsed resolved states */
 .redline--accepted,

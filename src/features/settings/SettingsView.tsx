@@ -23,6 +23,7 @@ import { isUsagePingActive, isUsageOptedOut, setUsageOptOut } from "@/lib/usageT
 import { UpgradeLink } from "@/ui/UpgradeGate";
 import { AiProvidersCard } from "./AiProvidersCard";
 import { CourtListenerCard } from "./CourtListenerCard";
+import { UpdatesCard } from "./UpdatesCard";
 import "./settings.css";
 
 // Footer links on the marketing site (www.vaquill.ai, the domain the manifest
@@ -289,6 +290,8 @@ export function SettingsView({
           </Field>
         </div>
       </div>
+
+      <UpdatesCard />
 
       {onReplayWalkthrough && (
         <div className="card settings-card">

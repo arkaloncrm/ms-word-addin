@@ -7,6 +7,8 @@ import {
 } from "@/api/chat";
 import type { ChatAttachment } from "@/ai/providers/types";
 import { readFullDocumentText, readSelectionText } from "@/office/document";
+import { readDocumentComments } from "@/office/comments";
+import { formatCommentsForAi } from "@/lib/wordComments";
 import { uuid } from "@/api/ids";
 import { errorMessage } from "@/api/errors";
 
@@ -209,7 +211,13 @@ export function useAssistant() {
           setState((s) => ({ ...s, streaming: false, thinking: null }));
           return;
         }
-        const context = mergeContext(baseContext, atts);
+        // Whole-document asks also see the Word comments (author, text, replies
+        // and the clause each is attached to), so "check my comments" works.
+        // Appended after the attachment merge so a budget cut never drops them.
+        const commentsBlock =
+          scope === "document" ? formatCommentsForAi(await readDocumentComments()) : "";
+        const merged = mergeContext(baseContext, atts);
+        const context = commentsBlock ? `${merged}\n\n${commentsBlock}` : merged;
         // PDFs ride the request as provider file attachments (community edition);
         // the hosted path receives none (its PDFs are already text). Merge them
         // into the grounding options passed to the stream.

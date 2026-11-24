@@ -4,6 +4,7 @@ import type { StreamHandlers } from "@/api/sse";
 import type { ContractReviewResponse, RedlineSuggestion, ReviewDepth, ReviewFlag } from "@/api/types";
 import { clauseFixPrompt, contractReviewPrompt, normalizeReviewDepth } from "@/ai/prompts";
 import { groundingFor } from "@/lib/grounding";
+import { groundPlacement } from "@/lib/placement";
 import { IncompleteAnswerError, runJson } from "./llm";
 
 /**
@@ -136,6 +137,8 @@ function normalizeRedline(r: unknown, doc: string): RedlineSuggestion {
     severity: severityFrom(o),
     fromInstruction:
       typeof o.fromInstruction === "string" && o.fromInstruction.trim() ? o.fromInstruction.trim() : null,
+    // A missing clause says where it goes (see PLACEMENT_RULES); never the cursor.
+    ...(grounding === "insertion" ? groundPlacement(o, doc) : {}),
   };
 }
 

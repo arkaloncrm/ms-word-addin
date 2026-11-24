@@ -273,3 +273,12 @@
   height: 1px;
   background: var(--border);
 }
+
+/* "A newer version of ArkLaw is ready" banner, under the top bar. Collapses to
+   nothing when there is no update. */
+.app-update:empty {
+  display: none;
+}
+.app-update {
+  padding: 8px 12px 0;
+}

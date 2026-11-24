@@ -4,7 +4,9 @@
  * clauses look like authored Word content instead of flat pasted text.
  */
 import { resolveAfterAnchor } from "./anchor";
-import { runWord, serializeTrackChanges } from "./run";
+import { OfficeError, runWord, serializeTrackChanges } from "./run";
+import { locateInsertionAnchor, type InsertPlacement } from "./insertAnchor";
+import { stripLeadingEnumerator } from "./search";
 import { sampleInsertionFont, matchInsertedFont } from "./font";
 import { inheritListNumbering } from "./lists";
 
@@ -278,4 +280,104 @@ export async function insertClauseFormatted(
       }
     }
   }));
+}
+
+/** A new clause whose placement could not be found. Nothing was inserted. */
+export class PlacementNotFoundError extends OfficeError {
+  constructor() {
+    super(
+      "Couldn't place this: the clause it should follow wasn't found in the document. Nothing was inserted.",
+      "placement_not_found",
+    );
+    this.name = "PlacementNotFoundError";
+  }
+}
+
+/** Where a located anchor sends new paragraphs: after the anchor paragraph, or
+ *  after its whole table when it sits in a cell (never inside the cell). */
+async function afterAnchor(
+  context: Word.RequestContext,
+  para: Word.Paragraph,
+): Promise<Word.Paragraph | Word.Range> {
+  const table = para.parentTableOrNullObject;
+  table.load("isNullObject");
+  await context.sync();
+  return table.isNullObject ? para : table.getRange(Word.RangeLocation.after);
+}
+
+/**
+ * Insert a new clause at its stated placement (see insertAnchor.ts), as its own
+ * tracked change. Only the contract wording goes in: no label or heading is
+ * added. The first paragraph joins the numbering of the clause it follows, so
+ * Word renumbers natively; when that numbering is Word's automatic numbering, a
+ * number the model typed in front is removed so the clause is not numbered
+ * twice. Throws PlacementNotFoundError, and inserts NOTHING, when the placement
+ * cannot be found: a new clause is never dropped at the cursor by default.
+ */
+export async function insertClauseAtAnchor(
+  text: string,
+  placement: InsertPlacement,
+  opts: { tracked?: boolean } = {},
+): Promise<{ via: "text" | "number" }> {
+  const tracked = opts.tracked ?? true;
+  const blocks = clauseBlocks(text);
+  return serializeTrackChanges(() =>
+    runWord(async (context) => {
+      const doc = context.document;
+      doc.load("changeTrackingMode");
+      await context.sync();
+
+      // Located immediately before inserting, so an earlier edit in the same
+      // batch cannot leave us with a stale position.
+      const located = await locateInsertionAnchor(context, placement);
+      if (!located) throw new PlacementNotFoundError();
+      const anchor = await afterAnchor(context, located.anchor);
+
+      const li = located.levelSource.listItemOrNullObject;
+      li.load("isNullObject");
+      await context.sync();
+      const autoNumbered = !li.isNullObject;
+      const first = blocks[0] ?? "";
+      const firstText = autoNumbered ? stripLeadingEnumerator(first) || first : first;
+
+      const priorMode = doc.changeTrackingMode;
+      try {
+        doc.changeTrackingMode = tracked ? Word.ChangeTrackingMode.trackAll : Word.ChangeTrackingMode.off;
+        await context.sync();
+        const head = anchor.insertParagraph(firstText, Word.InsertLocation.after);
+        let cursor: Word.Paragraph = head;
+        for (const block of blocks.slice(1)) {
+          cursor = cursor.insertParagraph(block, Word.InsertLocation.after);
+        }
+        head.select();
+        await context.sync();
+        // Only the first paragraph takes a clause number; any body paragraphs
+        // stay out of the list so each does not take a number of its own.
+        await inheritListNumbering(context, located.levelSource, [head]);
+      } finally {
+        try {
+          doc.changeTrackingMode = priorMode;
+          await context.sync();
+        } catch {
+          // original error (if any) propagates
+        }
+      }
+      return { via: located.via };
+    }),
+  );
+}
+
+/**
+ * "Show me where": put the cursor at the end of the paragraph a new clause
+ * should follow, so the lawyer can check the spot (and, if they choose, insert
+ * at the cursor). Returns false when the placement cannot be found.
+ */
+export async function selectInsertionPoint(placement: InsertPlacement): Promise<boolean> {
+  return runWord(async (context) => {
+    const located = await locateInsertionAnchor(context, placement);
+    if (!located) return false;
+    located.anchor.getRange(Word.RangeLocation.end).select();
+    await context.sync();
+    return true;
+  });
 }

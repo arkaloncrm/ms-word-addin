@@ -57,6 +57,17 @@ export function askDocumentNote(context: string): string {
   );
 }
 
+/**
+ * What Ask can do around the answer, so the model does not tell the lawyer it
+ * "can't edit the document" (it inferred that from having no edit tool) or
+ * "can't see comments". Exported for tests.
+ */
+export const ASK_CAPABILITIES =
+  " ArkLaw can turn wording you propose into tracked changes in the open document: the lawyer asks for it to be inserted or applied, or presses Turn into changes under your answer, and then reviews each change before it goes in. " +
+  "So never say you cannot edit the document, and never ask the lawyer to paste wording in themselves. " +
+  "When the lawyer asks for a change or new wording, give the exact contract wording in a quote block (lines starting with >), say which clause it replaces or which clause it should follow, and keep your explanation outside the quote block. " +
+  "The Word comments in the document, if any, are listed after the document text under [WORD COMMENTS], with the text each one is attached to. When asked about comments, address each one and the clause it is attached to.";
+
 /** Grounded assistant chat over the open document (streamed). `officialText` is
  *  section text fetched from the Federal Register of Legislation, if any. */
 export function assistantSystem(context: string, officialText = ""): string {
@@ -72,7 +83,7 @@ export function assistantSystem(context: string, officialText = ""): string {
   const quoting = context && context.trim()
     ? " When a point relies on the document, quote its exact words in double quotation marks, copied verbatim, and name the clause number, so the lawyer can click the quote to see it in the document."
     : "";
-  return `${GROUNDING} Answer the lawyer's question clearly and directly.${quoting}${LEGISLATION_CITING}${doc}${officialText}`;
+  return `${GROUNDING} Answer the lawyer's question clearly and directly.${quoting}${LEGISLATION_CITING}${ASK_CAPABILITIES}${doc}${officialText}`;
 }
 
 export function rewritePrompt(
@@ -337,7 +348,7 @@ export function contractReviewPrompt(
       REVIEW_MATERIALITY_RULES +
       (instructions && instructions.trim() ? REVIEW_INSTRUCTION_RULES : "") +
       `For each issue produce a redline. currentLanguage MUST be copied VERBATIM from the contract (an exact substring) so it can be located; ` +
-      `if you are proposing to ADD a missing clause, set currentLanguage to "" and grounding to "insertion". ` +
+      PLACEMENT_RULES +
       `Set grounding to "verified" only when currentLanguage is an exact substring of the contract, else "unverified". ` +
       `Mark isDealBreaker true only for walk-away issues. ` +
       `In each flag, quote is the exact words from the contract the flag is about, copied VERBATIM (at most about 300 characters), or "" if the flag is about something missing. ` +
@@ -345,6 +356,7 @@ export function contractReviewPrompt(
       `Schema: {"summary": string, "overallRisk": "green"|"yellow"|"red", ` +
       `"redlines": [{"clauseName": string, "sectionReference": string|null, "currentLanguage": string, "proposedLanguage": string, ` +
       `"rationale": string, "fallbackPosition": string|null, "grounding": "verified"|"unverified"|"insertion", ` +
+      `"insertAfter": string|null, "insertAfterClause": string|null, ` +
       `"severity": "high"|"medium"|"low", "isDealBreaker": boolean, "nature": "substantive"|"housekeeping", "fromInstruction": string|null}], ` +
       `"missingClauses": string[], ` +
       `"negotiationPriorities": [{"tier": number, "tierLabel": string, "items": string[]}], ` +
@@ -422,12 +434,23 @@ export function clauseFixPrompt(clauseName: string, currentLanguage: string, jur
   };
 }
 
+/** How the edit and review models say where NEW wording goes. Exported for tests. */
+export const PLACEMENT_RULES =
+  'To ADD new wording with no existing text to replace (a new clause, sub-clause or definition), set currentLanguage to "" and grounding to "insertion", and say where it goes: ' +
+  "insertAfter is the last 8 to 25 words of the paragraph the new wording should follow, copied VERBATIM from the document (no clause number), " +
+  'and insertAfterClause is that paragraph\'s clause number (for example "2.2"), or null if it has none. ' +
+  "Put new wording where it belongs (a new definition after the last existing definition, a new sub-clause at the end of the clause it belongs to), " +
+  "preferring the end of a clause so existing numbering and cross-references do not change. " +
+  'Start a new numbered clause or definition with its number (for example "1.5"). ';
+
 export function editDocumentPrompt(
   documentText: string,
   instruction: string,
   contractType: string | undefined,
   priorInstructions: string[],
   priorEdits: { label: string; currentLanguage: string; proposedLanguage: string }[],
+  /** The document's Word comments, formatted for the model. Context only. */
+  comments = "",
 ): Prompt2 {
   const ctx = contractType ? ` This is a ${contractType}.` : "";
   const priorBlock =
@@ -438,17 +461,25 @@ export function editDocumentPrompt(
           .map((e, i) => `${i + 1}. ${e.label}: "${e.currentLanguage}" -> "${e.proposedLanguage}"`)
           .join("\n")
       : "";
+  const commentBlock = comments.trim()
+    ? `\n\nWord comments in the document (context only; never quote a comment as currentLanguage or insertAfter):\n${comments.trim()}`
+    : "";
   return {
     system:
       `${GROUNDING} Apply the lawyer's instruction to the open document as a set of grounded redline edits.${ctx} ` +
-      `currentLanguage MUST be copied VERBATIM from the document (an exact substring) so it can be located and replaced; ` +
-      `if you are ADDING new language with no existing text to replace, set currentLanguage to "" and grounding to "insertion". ` +
+      `Numbered paragraphs are shown with their clause number in front. That number may be Word's automatic numbering, which is not part of the text, so never put a clause number at the start of currentLanguage or insertAfter. ` +
+      `currentLanguage MUST be copied VERBATIM from the document (an exact substring) so it can be located and replaced. ` +
+      PLACEMENT_RULES +
+      `Give each separate change as its own edit, so the lawyer can accept or reject each one in Word. ` +
+      `Include consequential amendments (a new defined term, a cross-reference, another clause that relies on the change) as edits of their own. ` +
+      `proposedLanguage holds only contract wording: no commentary, questions, notes, labels or markdown. ` +
       `Set grounding to "verified" only when currentLanguage is an exact substring of the document, else "unverified". ` +
       `Produce only the changed passages, not the whole document. ${JSON_ONLY} ` +
       `Schema: {"overview": string, "edits": [{"label": string, "sectionReference": string|null, ` +
       `"currentLanguage": string, "proposedLanguage": string, "rationale": string, "fallbackPosition": string|null, ` +
-      `"grounding": "verified"|"unverified"|"insertion", "nature": "substantive"|"housekeeping"}], "summary": string}.`,
-    user: `Instruction: ${instruction}${priorBlock}\n\nDocument:\n${documentText.slice(0, 200_000)}`,
+      `"grounding": "verified"|"unverified"|"insertion", "insertAfter": string|null, "insertAfterClause": string|null, ` +
+      `"nature": "substantive"|"housekeeping"}], "summary": string}.`,
+    user: `Instruction: ${instruction}${priorBlock}${commentBlock}\n\nDocument:\n${documentText.slice(0, 200_000)}`,
   };
 }
 

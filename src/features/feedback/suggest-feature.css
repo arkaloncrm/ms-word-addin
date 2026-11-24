@@ -1,0 +1,8 @@
+/* "Suggest a feature" form (trial only). */
+.suggest-feature .field {
+  margin: 0;
+}
+.suggest-feature__warn {
+  color: var(--warning);
+  font-weight: 600;
+}
