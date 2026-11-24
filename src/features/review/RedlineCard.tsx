@@ -10,8 +10,10 @@ import { InlineDiff } from "./InlineDiff";
 import { SeverityBadge } from "./SeverityBadge";
 import { severityOf } from "@/lib/severity";
 import { toClauseTypeKey } from "@/lib/strings";
-import { applyVerifiedRedline, canApplyInPane, AnchorNotFoundError } from "@/office/redline";
-import { insertClauseFormatted } from "@/office/richInsert";
+import { AnchorNotFoundError } from "@/office/redline";
+import { insertClauseTracked, PlacementNotFoundError, selectInsertionPoint } from "@/office/richInsert";
+import { describePlacement, hasPlacement } from "@/office/insertAnchor";
+import { applySuggestion, canAutoApply, placementOf } from "./applySuggestion";
 import { selectClauseInDocument } from "@/office/navigate";
 import { goToBookmark } from "@/office/bookmarks";
 import { rewriteClause } from "@/api/clause-tools";
@@ -196,6 +198,7 @@ export function RedlineCard({
   setApplyBusy,
   fixContext,
   onApplied,
+  externalError,
 }: {
   redline: RedlineSuggestion;
   index: number;
@@ -211,6 +214,9 @@ export function RedlineCard({
    *  infer this from its own state (applying mutates the DOCUMENT, not the
    *  redline list), so anything tracking document state needs telling. */
   onApplied?: () => void;
+  /** A failure reported for this card by a batch "Apply all", shown on the card
+   *  so the lawyer can see which change did not go in and why. */
+  externalError?: { message: string; unplaced?: boolean } | null;
 }) {
   const { navigate } = useAppNav();
   const [busy, setBusy] = useState(false);
@@ -261,7 +267,15 @@ export function RedlineCard({
   }, [editing]);
 
   const isInsertion = active.grounding === "insertion";
-  const applicable = isInsertion || canApplyInPane(active);
+  // An insertion is applied only where its placement says, never at the cursor
+  // by default; one with no placement (or whose placement was not found) shows
+  // the "couldn't place this" options instead.
+  const [unplaced, setUnplaced] = useState(false);
+  const placement = placementOf(active);
+  const placed = isInsertion && hasPlacement(placement);
+  const placementLine = isInsertion ? describePlacement(placement) : "";
+  const showUnplaced = isInsertion && (!placed || unplaced || !!externalError?.unplaced);
+  const applicable = canAutoApply(active) && !showUnplaced;
   const style = { animationDelay: `${Math.min(index, 10) * 28}ms` };
 
   // The language we will actually apply / copy: the user's edit if any, else
@@ -275,8 +289,23 @@ export function RedlineCard({
   }
 
   async function locate() {
-    if (isInsertion) return;
     setNote(null);
+    if (isInsertion) {
+      // "Show me where": the end of the paragraph the new wording follows.
+      try {
+        const ok = placed && (await selectInsertionPoint(placement));
+        if (!ok) {
+          const target = active.insertAfterClause || active.sectionReference;
+          const found = target ? await selectClauseInDocument(target) : false;
+          if (!found) {
+            setNote("Couldn't find that spot either. Put your cursor where it should go, then use Insert at cursor.");
+          }
+        }
+      } catch (e) {
+        setNote(errorMessage(e));
+      }
+      return;
+    }
     try {
       // Prefer the bookmark anchor if one was placed for this clause: it survives
       // edits that would defeat a text search. Falls back to searching the text.
@@ -299,22 +328,45 @@ export function RedlineCard({
     setApplyBusy?.(true);
     setNote(null);
     try {
-      if (isInsertion) await insertClauseFormatted(active.clauseName, proposed, { tracked });
-      else await applyVerifiedRedline({ ...active, proposedLanguage: proposed }, { tracked });
+      await applySuggestion(active, { proposed, tracked });
       decide("accepted");
       onApplied?.();
     } catch (e) {
-      setNote(
-        e instanceof AnchorNotFoundError
-          ? "Could not find this clause verbatim. Use Download redlined copy instead."
-          : errorMessage(e),
-      );
+      if (e instanceof PlacementNotFoundError) {
+        setUnplaced(true);
+        setNote("Couldn't place this: the clause it should follow wasn't found. Nothing was inserted.");
+      } else {
+        setNote(
+          e instanceof AnchorNotFoundError
+            ? "Could not find this clause verbatim. Use Download redlined copy instead."
+            : errorMessage(e),
+        );
+      }
     } finally {
       setBusy(false);
       setApplyBusy?.(false);
     }
   }
   const accept = () => applyWith(true);
+
+  // The lawyer's explicit choice: put the new wording after the paragraph the
+  // cursor is in. Only the wording goes in (no label), as a tracked change.
+  async function insertAtCursor() {
+    if (busy || applyBusy) return;
+    setBusy(true);
+    setApplyBusy?.(true);
+    setNote(null);
+    try {
+      await insertClauseTracked(proposed);
+      decide("accepted");
+      onApplied?.();
+    } catch (e) {
+      setNote(errorMessage(e));
+    } finally {
+      setBusy(false);
+      setApplyBusy?.(false);
+    }
+  }
 
   async function copyProposed() {
     if (await copyPlain(proposed)) {
@@ -601,14 +653,15 @@ export function RedlineCard({
             {intent && collapseRationale && <span className="redline__intent">{intent}</span>}
           </div>
         </div>
-        {!isInsertion && (
-          <IconButton label="Find in document" onClick={locate}>
+        {(!isInsertion || placed || !!active.sectionReference) && (
+          <IconButton label={isInsertion ? "Show me where" : "Find in document"} onClick={locate}>
             <LocateIcon size={14} />
           </IconButton>
         )}
       </div>
 
       {active.sectionReference && <p className="small muted redline__ref">{active.sectionReference}</p>}
+      {placementLine && <p className="small muted redline__ref">Goes {placementLine}</p>}
 
       {editing ? (
         <div className="redline__edit">
@@ -686,9 +739,39 @@ export function RedlineCard({
         </div>
       )}
 
+      {!editing && showUnplaced && (
+        <div className="redline__unplaced" role="status">
+          <span className="small">
+            {externalError?.unplaced || unplaced
+              ? "Couldn't place this: the clause it should follow wasn't found. Nothing was inserted."
+              : "No placement was given for this new wording, so it was not inserted."}
+          </span>
+          <div className="row" style={{ gap: 6, flexWrap: "wrap" }}>
+            <Button variant="ghost" size="sm" onClick={copyProposed}>
+              {copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />} {copied ? "Copied" : "Copy"}
+            </Button>
+            {(placed || !!active.sectionReference) && (
+              <Button variant="ghost" size="sm" onClick={() => void locate()}>
+                <LocateIcon size={14} /> Show me where
+              </Button>
+            )}
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => void insertAtCursor()}
+              loading={busy}
+              disabled={applyBusy && !busy}
+              title="Insert this wording after the paragraph your cursor is in, as a tracked change"
+            >
+              Insert at cursor
+            </Button>
+          </div>
+        </div>
+      )}
+
       {!editing && (
         <div className="redline__actions">
-          {applicable ? (
+          {showUnplaced ? null : applicable ? (
             <SplitButton
               label={isInsertion ? "Insert clause" : "Accept"}
               icon={<CheckIcon size={14} />}
@@ -721,7 +804,7 @@ export function RedlineCard({
             <XIcon size={14} />
           </IconButton>
           {overflowItems.length > 0 && <OverflowMenu label="More actions" items={overflowItems} />}
-          {!applicable && (
+          {!applicable && !showUnplaced && (
             <span
               className="small muted"
               title={
@@ -739,9 +822,13 @@ export function RedlineCard({
               <CheckIcon size={12} /> Noted
             </span>
           )}
-          {note && (
-            <span className={`small ${note.includes("Could not") ? "redline__note--err" : "muted"}`}>
-              {note}
+          {(note ?? externalError?.message) && (
+            <span
+              className={`small ${
+                /could not|couldn't/i.test(note ?? externalError?.message ?? "") ? "redline__note--err" : "muted"
+              }`}
+            >
+              {note ?? externalError?.message}
             </span>
           )}
         </div>

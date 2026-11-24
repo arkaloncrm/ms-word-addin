@@ -21,6 +21,7 @@ import {
 } from "@/ai/prompts";
 import { normalizeParties } from "@/lib/parties";
 import { groundingFor } from "@/lib/grounding";
+import { groundPlacement } from "@/lib/placement";
 import { listDefinedTerms } from "@/lib/defined-terms";
 import { shapeDraftHere } from "@/features/drafthere/shape";
 import { DRAFT_HERE_PATH } from "@/api/draft-here";
@@ -240,6 +241,7 @@ export async function communityEditDocument(body: Record<string, unknown>): Prom
     str(body.contractType) || undefined,
     strArray(body.priorInstructions),
     priorEdits,
+    str(body.comments),
   );
   const raw = (await runJson(p.system, p.user)) as Record<string, unknown>;
   return groundEdits(documentText, raw);
@@ -274,6 +276,10 @@ function groundEdits(documentText: string, raw: Record<string, unknown>): Commun
       grounding: isInsertion ? ("insertion" as const) : groundingFor(currentLanguage, documentText).grounding,
       nature:
         e.nature === "housekeeping" ? "housekeeping" : e.nature === "substantive" ? "substantive" : undefined,
+      // New wording says where it goes; a placement that is not in the document
+      // is dropped (never searched for), and the card then offers the lawyer the
+      // choice instead of guessing a spot.
+      ...(isInsertion ? groundPlacement(e, documentText) : {}),
     }));
   return { overview: str(raw.overview), edits, summary: str(raw.summary) };
 }

@@ -31,6 +31,10 @@ export interface EditItem {
   isDealBreaker?: boolean;
   /** The model's classification of the change. */
   nature?: "substantive" | "housekeeping";
+  /** Insertions: verbatim end of the paragraph the new wording follows. */
+  insertAfter?: string | null;
+  /** Insertions: number of the clause the new wording follows ("2.2"). */
+  insertAfterClause?: string | null;
 }
 
 interface EditResponse {
@@ -52,6 +56,8 @@ export interface EditResult {
 export interface EditPriorContext {
   priorInstructions?: string[];
   priorEdits?: { label: string; currentLanguage: string; proposedLanguage: string }[];
+  /** The document's Word comments, formatted for the model (context only). */
+  comments?: string;
 }
 
 export async function editDocument(
@@ -69,6 +75,7 @@ export async function editDocument(
   if (contractType) body.contractType = contractType;
   if (prior?.priorInstructions?.length) body.priorInstructions = prior.priorInstructions;
   if (prior?.priorEdits?.length) body.priorEdits = prior.priorEdits;
+  if (prior?.comments?.trim()) body.comments = prior.comments;
   const res = await request<EditResponse>("/api/v1/drafting/edit-document", {
     method: "POST",
     body,
@@ -116,6 +123,7 @@ export async function streamEditDocument(
   if (contractType) body.contractType = contractType;
   if (prior?.priorInstructions?.length) body.priorInstructions = prior.priorInstructions;
   if (prior?.priorEdits?.length) body.priorEdits = prior.priorEdits;
+  if (prior?.comments?.trim()) body.comments = prior.comments;
 
   await postStream("/api/v1/drafting/edit-document/stream", body, {
     signal: handlers.signal,
@@ -171,5 +179,7 @@ export function editToRedline(e: EditItem): RedlineSuggestion {
     approvalLevel: e.approvalLevel ?? null,
     isDealBreaker: e.isDealBreaker ?? false,
     nature: e.nature,
+    insertAfter: e.insertAfter ?? null,
+    insertAfterClause: e.insertAfterClause ?? null,
   };
 }

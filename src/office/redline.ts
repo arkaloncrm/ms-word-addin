@@ -1,6 +1,6 @@
 import { applyWordDiff, type DiffResult } from "office-word-diff";
 import { runWord, OfficeError, serializeTrackChanges } from "./run";
-import { findRanges } from "./search";
+import { findRanges, stripLeadingEnumerator } from "./search";
 import type { RedlineSuggestion } from "@/api/types";
 
 /**
@@ -87,6 +87,17 @@ function tailWindow(s: string): string {
 function anchorMatches(found: string, expected: string): boolean {
   const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, "");
   return norm(found) === norm(expected);
+}
+
+/** Remove `lead` (a clause number such as "9.1 ") from the start of `text` when
+ *  it is there; otherwise return `text` unchanged. */
+export function withoutLeadingNumber(text: string, lead: string): string {
+  const num = lead.trim();
+  if (!num) return text;
+  const t = text.trimStart();
+  if (!t.startsWith(num)) return text;
+  const rest = t.slice(num.length);
+  return /^\s/.test(rest) ? rest.trimStart() : text;
 }
 
 const AMBIGUOUS = new OfficeError(
@@ -187,18 +198,29 @@ export async function applyVerifiedRedline(
     // the safety net for the head + tail path: if the two anchors bracketed the
     // wrong region (e.g. a non-unique tail), the assembled text will not match
     // and we abort cleanly instead of mangling an unrelated span.
+    // The edit model reads the contract WITH its clause numbers, so it can quote
+    // "9.1 The Customer indemnifies..." where 9.1 is Word's automatic number and
+    // not part of the text. The search already retries without the number; match
+    // the located span the same way, and drop the same number from the proposal
+    // so the clause is not numbered twice.
+    let proposed = r.proposedLanguage;
     if (!anchorMatches(range.text, query)) {
-      try {
-        doc.changeTrackingMode = priorMode;
-        await context.sync();
-      } catch {
-        // fall through to the throw below
+      const bare = stripLeadingEnumerator(query);
+      if (bare && anchorMatches(range.text, bare)) {
+        proposed = withoutLeadingNumber(proposed, query.slice(0, query.length - bare.length));
+      } else {
+        try {
+          doc.changeTrackingMode = priorMode;
+          await context.sync();
+        } catch {
+          // fall through to the throw below
+        }
+        throw new AnchorNotFoundError(r.clauseName);
       }
-      throw new AnchorNotFoundError(r.clauseName);
     }
 
     try {
-      const diff = await applyWordDiff(context, range, range.text, r.proposedLanguage, {
+      const diff = await applyWordDiff(context, range, range.text, proposed, {
         enableTracking: tracked,
         logLevel: "error",
       });

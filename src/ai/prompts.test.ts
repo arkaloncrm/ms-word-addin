@@ -169,3 +169,39 @@ describe("assistantSystem", () => {
     expect(assistantSystem("")).not.toContain("double quotation marks");
   });
 });
+
+describe("placement and edit rules (tester fix, 24 Nov)", () => {
+  it("the edit prompt requires a placement for new wording and separate consequential edits", async () => {
+    const { editDocumentPrompt, PLACEMENT_RULES } = await import("./prompts");
+    const p = editDocumentPrompt("1.1 Text.", "add a clause", undefined, [], []);
+    expect(p.system).toContain(PLACEMENT_RULES);
+    expect(p.system).toMatch(/insertAfter/);
+    expect(p.system).toMatch(/insertAfterClause/);
+    expect(p.system).toMatch(/consequential amendments/);
+    expect(p.system).toMatch(/never put a clause number at the start of currentLanguage/);
+    expect(p.system).toMatch(/no commentary/);
+  });
+
+  it("the edit prompt carries Word comments as context only when there are some", async () => {
+    const { editDocumentPrompt } = await import("./prompts");
+    expect(editDocumentPrompt("Doc.", "x", undefined, [], []).user).not.toMatch(/Word comments/);
+    const withComments = editDocumentPrompt("Doc.", "x", undefined, [], [], "1. Jane (open) on \"x\": fix this").user;
+    expect(withComments).toMatch(/Word comments in the document \(context only/);
+    expect(withComments).toContain("fix this");
+  });
+
+  it("the review prompt asks missing clauses for a placement", async () => {
+    const { contractReviewPrompt, PLACEMENT_RULES } = await import("./prompts");
+    const s = contractReviewPrompt("Contract.", "msa", "Supplier", "balanced", undefined, undefined).system;
+    expect(s).toContain(PLACEMENT_RULES);
+    expect(s).toMatch(/"insertAfter": string\|null/);
+  });
+
+  it("Ask is told it can turn wording into tracked changes and reads comments", async () => {
+    const { assistantSystem, ASK_CAPABILITIES } = await import("./prompts");
+    const s = assistantSystem("Clause 1. Text.");
+    expect(s).toContain(ASK_CAPABILITIES);
+    expect(s).toMatch(/never say you cannot edit the document/);
+    expect(s).toMatch(/\[WORD COMMENTS\]/);
+  });
+});

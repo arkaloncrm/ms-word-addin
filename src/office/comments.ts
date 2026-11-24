@@ -1,5 +1,6 @@
 import { runWord } from "./run";
 import { findBestRange } from "./search";
+import type { CommentsRead, DocumentComment } from "@/lib/wordComments";
 
 /**
  * Insert the playbook rationale for each flagged issue as a native Word comment
@@ -179,4 +180,60 @@ export async function replyToComment(id: string, text: string): Promise<boolean>
     await context.sync();
     return true;
   });
+}
+
+/**
+ * Read every comment in the main body: author, text, resolved state, replies,
+ * and the document text it is attached to, in document order. Uses
+ * `body.getComments()` (WordApi 1.5, cross-platform) like the rest of this
+ * module. Defensive: if the anchored text or replies cannot be read on this
+ * host, the comments are still returned without them, and a total failure
+ * returns `failed: true` (never throws) so callers can say so plainly.
+ */
+export async function readDocumentComments(): Promise<CommentsRead> {
+  try {
+    return await runWord(async (context) => {
+      const comments = context.document.body.getComments();
+      comments.load("items/id,items/authorName,items/content,items/resolved");
+      await context.sync();
+      const items = comments.items;
+      if (items.length === 0) return { comments: [], failed: false };
+
+      const base: DocumentComment[] = items.map((c) => ({
+        id: c.id,
+        author: c.authorName ?? "",
+        text: c.content ?? "",
+        resolved: !!c.resolved,
+        anchorText: "",
+        replies: [],
+      }));
+
+      // Anchored text and replies (WordApi 1.4) in one extra round trip.
+      try {
+        const ranges = items.map((c) => {
+          const r = c.getRange();
+          r.load("text");
+          return r;
+        });
+        const replies = items.map((c) => {
+          const rs = c.replies;
+          rs.load("items/authorName,items/content");
+          return rs;
+        });
+        await context.sync();
+        return {
+          comments: base.map((c, i) => ({
+            ...c,
+            anchorText: ranges[i]?.text ?? "",
+            replies: (replies[i]?.items ?? []).map((r) => ({ author: r.authorName ?? "", text: r.content ?? "" })),
+          })),
+          failed: false,
+        };
+      } catch {
+        return { comments: base, failed: false };
+      }
+    });
+  } catch {
+    return { comments: [], failed: true };
+  }
 }

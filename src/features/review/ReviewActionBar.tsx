@@ -5,8 +5,8 @@ import { isCommunity } from "@/community/edition";
 import { exportCorrectedDocx } from "@/api/contract-review";
 import { downloadBlob, downloadDocx, readDocumentAsDocxBlob } from "@/office/export";
 import { readDocumentText } from "@/office/document";
-import { applyVerifiedRedline, canApplyInPane } from "@/office/redline";
-import { insertClauseFormatted } from "@/office/richInsert";
+import { orderBottomUp } from "@/office/applyOrder";
+import { applySuggestion, canAutoApply, placementOf } from "./applySuggestion";
 import { errorMessage } from "@/api/errors";
 import type { RedlineSuggestion, AcceptedRedline } from "@/api/types";
 import type { Decision } from "./decisions";
@@ -52,7 +52,12 @@ export function ReviewActionBar({
 
   const openApplicable = redlines
     .map((r, i) => ({ r, i }))
-    .filter(({ r, i }) => decisionOf(i) === "pending" && (r.grounding === "insertion" || canApplyInPane(r)));
+    .filter(({ r, i }) => decisionOf(i) === "pending" && canAutoApply(r));
+  // New wording with no placement is never dropped at the cursor in a batch; the
+  // card offers Copy / Show me where / Insert at cursor for those instead.
+  const unplacedCount = redlines.filter(
+    (r, i) => decisionOf(i) === "pending" && r.grounding === "insertion" && !canAutoApply(r),
+  ).length;
 
   // Apply every open, applicable redline in place as tracked changes. Returns a
   // count breakdown, or null if an apply is already running (never run
@@ -67,7 +72,18 @@ export function ReviewActionBar({
     let failed = 0;
     let skipped = 0;
     try {
-      for (const { r, i } of openApplicable) {
+      // Bottom of the document first, so an earlier edit never shifts the text a
+      // later one is anchored on. Each is still re-located just before it is
+      // applied (applySuggestion), and one failure never stops the rest.
+      const order = await orderBottomUp(
+        openApplicable.map(({ r }) =>
+          r.grounding === "insertion"
+            ? { kind: "insert" as const, placement: placementOf(r) }
+            : { kind: "replace" as const, query: r.currentLanguage },
+        ),
+      );
+      for (const k of order) {
+        const { r, i } = openApplicable[k]!;
         // Re-read the LIVE decision: the snapshot was captured at click time, so a
         // redline the reviewer dismissed (or accepted) during this loop must not
         // be written with the stale proposal.
@@ -78,8 +94,7 @@ export function ReviewActionBar({
           continue;
         }
         try {
-          if (r.grounding === "insertion") await insertClauseFormatted(r.clauseName, r.proposedLanguage);
-          else await applyVerifiedRedline(r);
+          await applySuggestion(r);
           setDecision(i, "accepted");
         } catch {
           // Leave this one open; the reviewer handles it individually. This is the
@@ -101,14 +116,19 @@ export function ReviewActionBar({
     setNote(null);
     const r = await runApplyAll();
     if (!r) return;
+    const unplacedNote =
+      unplacedCount > 0
+        ? ` ${unplacedCount} new clause${unplacedCount === 1 ? " has" : "s have"} no placement; use Insert at cursor on ${unplacedCount === 1 ? "that card" : "those cards"}.`
+        : "";
     if (r.failed > 0) {
       setError(
-        `Applied ${r.applied} of ${r.total}. ${r.failed} could not be placed automatically (the clause text was not found or appears more than once); apply those individually.`,
+        `Applied ${r.applied} of ${r.total}. ${r.failed} could not be placed automatically (the clause text was not found or appears more than once); apply those individually.${unplacedNote}`,
       );
     } else {
       setNote(
         `Applied ${r.applied} redline${r.applied === 1 ? "" : "s"} as tracked changes.` +
-          (r.skipped > 0 ? ` ${r.skipped} skipped (resolved while applying).` : ""),
+          (r.skipped > 0 ? ` ${r.skipped} skipped (resolved while applying).` : "") +
+          unplacedNote,
       );
     }
   }

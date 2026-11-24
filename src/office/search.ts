@@ -163,7 +163,7 @@ export async function gatherExtraScopes(context: Word.RequestContext): Promise<W
  * Used ONLY as a fallback after an exact search misses, so an over-eager strip
  * can never mis-anchor the common case. Returns "" when nothing was stripped.
  */
-function stripLeadingEnumerator(s: string): string {
+export function stripLeadingEnumerator(s: string): string {
   const stripped = s.replace(
     /^\s*(?:section|article|clause)?\s*(?:\d+(?:\.\d+)*|\([a-z0-9]{1,4}\)|[a-z]{1,2}[.)]|[ivxlcdm]+[.)])\s+/i,
     "",
@@ -182,6 +182,9 @@ function stripLeadingEnumerator(s: string): string {
 export async function findRanges(
   context: Word.RequestContext,
   query: string,
+  /** Search the main body only (never headers, footers or notes). Used to place
+   *  a new clause, which must land in the operative text. */
+  opts: { bodyOnly?: boolean } = {},
 ): Promise<Word.Range[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
@@ -199,6 +202,7 @@ export async function findRanges(
 
     const bodyHit = await searchScopes(context, [context.document.body], needle);
     if (bodyHit.length > 0) return bodyHit;
+    if (opts.bodyOnly) continue;
 
     const extraScopes = await gatherExtraScopes(context);
     if (extraScopes.length > 0) {

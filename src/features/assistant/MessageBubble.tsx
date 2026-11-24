@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Markdown, type CitationCtx, type DocQuoteCtx } from "./markdown";
 import { locateInDocument } from "@/office/navigate";
 import { IconButton } from "@/ui/primitives";
+import { OverflowMenu } from "@/ui/OverflowMenu";
 import { CopyIcon, EditIcon, CheckIcon } from "@/ui/icons";
 import { insertHtmlAtCursor } from "@/office/richInsert";
 import { markdownToSafeHtml } from "@/api/research";
@@ -43,12 +44,34 @@ function InsertGlyph() {
   );
 }
 
+/** Turn-into-changes glyph (a pen over a line). */
+function ChangesGlyph() {
+  return (
+    <svg viewBox="0 0 24 24" width={14} height={14} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+    </svg>
+  );
+}
+
 /**
- * Primary actions for an assistant answer. Copy and Insert are first-class
- * buttons (not hidden behind a kebab) so the two things a user most wants to do
- * with an answer are one click away.
+ * Primary actions for an assistant answer: Copy, and Turn into changes, which
+ * hands the answer's proposed wording to the Edit flow so each change lands in
+ * the clause it belongs to, as its own card the lawyer applies. Chat commentary
+ * never goes into the contract that way.
+ *
+ * The old Insert (the WHOLE answer pasted at the cursor) put the assistant's
+ * commentary and follow-up questions into the contract, at whatever heading the
+ * cursor happened to be on. It survives only as an explicitly labelled menu
+ * item, for pasting a research passage where the lawyer chooses.
  */
-function AssistantActions({ message }: { message: AssistantMessage }) {
+function AssistantActions({
+  message,
+  onTurnIntoChanges,
+}: {
+  message: AssistantMessage;
+  onTurnIntoChanges?: (message: AssistantMessage) => void;
+}) {
   const [note, setNote] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -78,7 +101,7 @@ function AssistantActions({ message }: { message: AssistantMessage }) {
       // caret, join the Navigation pane, and appear in a table of contents,
       // restructuring the lawyer's document just to paste an answer into it.
       await insertHtmlAtCursor(markdownToSafeHtml(message.content, { headings: "bold", lists: "plain" }));
-      setNote("Inserted as tracked change");
+      setNote("Whole reply inserted at the cursor as a tracked change");
       setTimeout(() => setNote(null), 1800);
     } catch {
       setNote("Could not insert");
@@ -92,18 +115,30 @@ function AssistantActions({ message }: { message: AssistantMessage }) {
         {copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
         {copied ? "Copied" : "Copy"}
       </button>
-      <button
-        type="button"
-        className="msg__action-btn"
-        onClick={insert}
-        title="Insert into the document as a tracked change"
-      >
-        <InsertGlyph />
-        Insert
-      </button>
+      {onTurnIntoChanges && (
+        <button
+          type="button"
+          className="msg__action-btn"
+          onClick={() => onTurnIntoChanges(message)}
+          title="Turn the wording this answer proposes into tracked changes, each in the clause it belongs to. You review every change before it goes in."
+        >
+          <ChangesGlyph />
+          Turn into changes
+        </button>
+      )}
       {/* Cross-link: keep research done in Word from being lost to the local
           session by saving the answer as a note on a Vaquill AI client. */}
       <SaveAnswerToNotes content={message.content} />
+      <OverflowMenu
+        label="More answer actions"
+        items={[
+          {
+            label: "Insert whole reply at cursor (as written)",
+            icon: <InsertGlyph />,
+            onSelect: () => void insert(),
+          },
+        ]}
+      />
       {note && <span className="small muted msg__actions-note">{note}</span>}
     </div>
   );
@@ -249,10 +284,13 @@ function UserActions({
 export function MessageBubble({
   message,
   onEdit,
+  onTurnIntoChanges,
 }: {
   message: AssistantMessage;
   /** Enables Copy/Edit on a user message (edit-and-re-run). */
   onEdit?: (message: AssistantMessage) => void;
+  /** Enables Turn into changes on an assistant answer. */
+  onTurnIntoChanges?: (message: AssistantMessage) => void;
 }) {
   // Sources panel open state + a wrapper ref, so an inline [N] click can open the
   // panel and scroll its item into view.
@@ -339,7 +377,9 @@ export function MessageBubble({
       {/* Every Commonwealth Act and section the answer cites, checked on the
           official register, once the answer has finished. */}
       {message.content && !message.pending && <LawCited text={message.content} />}
-      {message.content && !message.pending && <AssistantActions message={message} />}
+      {message.content && !message.pending && (
+        <AssistantActions message={message} onTurnIntoChanges={onTurnIntoChanges} />
+      )}
     </div>
   );
 }
