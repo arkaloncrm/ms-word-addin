@@ -32,9 +32,9 @@ const RAILWAY_JSON = {
 
 // Railway does not store these, so railway.ts leaves them out (writing them
 // would show as a change in every plan and redeploy on every apply):
-// ON_FAILURE is its default restart policy, and a Dockerfile is always used
-// when one is found (ArcDental, checked on staging 01/11/2026).
-const NOT_STORED = { restartPolicyType: 'ON_FAILURE', builder: 'DOCKERFILE' };
+// ON_FAILURE is its default restart policy. (Builder DOCKERFILE IS stored here,
+// because a Dockerfile path is set: seen on the 28/11/2026 apply.)
+const NOT_STORED = { restartPolicyType: 'ON_FAILURE' };
 
 async function loadService() {
   const sdk = path.join(HERE, 'node_modules', 'railway', 'dist', 'iac', 'index.js');

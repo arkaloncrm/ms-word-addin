@@ -32,12 +32,9 @@ export default defineRailway(() => {
   const msWordAddin = service("ms-word-addin", {
     source: github("arkaloncrm/ms-word-addin", { branch: "main", checkSuites: false }),
     // The ArkLaw community build (bring-your-own-key). Never the root Dockerfile.
-    // No builder line: Railway always builds with a Dockerfile when it finds one,
-    // and on 01/11/2026 ArcDental saw that Railway does not store builder
-    // DOCKERFILE (it stayed in every plan and every apply redeployed for nothing).
-    // After the first apply, check Railway shows this path; if it does not, set the
-    // service variable RAILWAY_DOCKERFILE_PATH=Dockerfile.community instead.
-    build: { dockerfilePath: "Dockerfile.community" },
+    // Applied 28/11/2026 23:54: Railway stored the path AND set builder
+    // DOCKERFILE itself, so both are written here and the plan stays empty.
+    build: { builder: "DOCKERFILE", dockerfilePath: "Dockerfile.community" },
     healthcheck: "/health",
     healthcheckTimeout: 60,
     // Restart on failure is Railway's default policy, so only the retry limit is
