@@ -1,0 +1,9 @@
+{
+  "name": "arklaw-railway-iac",
+  "private": true,
+  "description": "Railway's TypeScript SDK, needed only on the computer that runs `railway config plan` / `railway config apply`. Kept apart from the app's package.json so it never reaches the app. Install with: npm ci --prefix .railway --ignore-scripts",
+  "type": "module",
+  "devDependencies": {
+    "railway": "3.16.0"
+  }
+}
